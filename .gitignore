@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# env
+.env
+
+# build
+dist/
+build/
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / os
+.DS_Store
+.vscode/
+
+# локальные рабочие файлы (планы и т.п.)
+tmp/

@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16
+    container_name: telemost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: telemost
+      POSTGRES_PASSWORD: telemost
+      POSTGRES_DB: telemost
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # SFU-медиасервер для групповых видеозвонков (до 15 человек).
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: telemost-livekit
+    restart: unless-stopped
+    # Запускаем с нашим конфигом вместо дефолтного.
+    command: --config /etc/livekit.yaml
+    volumes:
+      # Пробрасываем конфиг внутрь контейнера (ro = read-only, менять не даём).
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"              # сигналинг (WebSocket/HTTP)
+      - "7881:7881"              # WebRTC поверх TCP (фолбэк)
+      - "50000-50010:50000-50010/udp"  # UDP-порты под медиапоток
+
+volumes:
+  pgdata:
