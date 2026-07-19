@@ -1,4 +1,5 @@
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -12,7 +13,14 @@ import secretRoutes from './routes/secrets.js';
 // запросы, не поднимая реальный сервер и не занимая порт.
 const app = express();
 
+// На проде Express стоит за nginx и видит все соединения от 127.0.0.1.
+// trust proxy = 1 говорит: реальный IP клиента бери из заголовка X-Forwarded-For,
+// который ставит nginx. БЕЗ этого rate-limit считал бы всех посетителей одним IP
+// и банил бы всех разом. В локалке (без прокси) настройка безвредна.
+app.set('trust proxy', 1);
+
 // Middleware
+app.use(helmet()); // набор защитных HTTP-заголовков (nosniff, скрытие X-Powered-By и т.д.)
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN, // пускаем запросы только с адреса фронта

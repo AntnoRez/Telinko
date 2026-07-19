@@ -8,7 +8,10 @@ const COOKIE_NAME = 'token';
 const cookieOptions = {
   httpOnly: true, // JS в браузере не может прочитать cookie → защита от XSS-кражи токена
   sameSite: 'lax', // не отправлять cookie на сторонние сайты (базовая защита от CSRF)
-  secure: false, // на localhost http; на проде (https) обязательно true
+  // secure: слать cookie только по https. Управляется через .env: на проде с TLS
+  // ставим COOKIE_SECURE=true; на localhost и http-стадии деплоя — false/не задано
+  // (иначе браузер молча отбросит cookie и логин «не будет работать»).
+  secure: process.env.COOKIE_SECURE === 'true',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней в мс — совпадает с сроком жизни JWT
 };
 
