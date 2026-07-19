@@ -1,12 +1,12 @@
 services:
   db:
     image: postgres:16
-    container_name: telemost-db
+    container_name: videocall-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: telemost
-      POSTGRES_PASSWORD: telemost
-      POSTGRES_DB: telemost
+      POSTGRES_USER: videocall
+      POSTGRES_PASSWORD: videocall
+      POSTGRES_DB: videocall
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
   # SFU-медиасервер для групповых видеозвонков (до 15 человек).
   livekit:
     image: livekit/livekit-server:latest
-    container_name: telemost-livekit
+    container_name: videocall-livekit
     restart: unless-stopped
     # Запускаем с нашим конфигом вместо дефолтного.
     command: --config /etc/livekit.yaml

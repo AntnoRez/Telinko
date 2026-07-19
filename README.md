@@ -1,4 +1,4 @@
-# Telemost — видеозвонки, чат и секретные ссылки
+# VideoCall — видеозвонки, чат и секретные ссылки
 
 Учебный пет-проект: клон Яндекс Телемоста. Групповые видеозвонки, чат-комнаты в реальном
 времени и отдельный инструмент — одноразовые «секретные ссылки» с шифрованием на клиенте.
@@ -10,7 +10,7 @@
 | Frontend | React 19 + Vite, Tailwind CSS 4, Zustand, React Router 7, socket.io-client, @livekit/components-react |
 | Backend | Node.js (ESM), Express 4, Sequelize + PostgreSQL, socket.io, livekit-server-sdk, jsonwebtoken, bcrypt |
 | Инфраструктура | Docker Compose: PostgreSQL 16 + LiveKit (self-hosted SFU) |
-| Тесты | node:test + supertest (отдельная БД `telemost_test`) |
+| Тесты | node:test + supertest (отдельная БД `videocall_test`) |
 
 ## Архитектура
 
@@ -187,10 +187,10 @@ npm run dev            # http://localhost:5173
 
 ```bash
 cd server
-npm test   # node:test + supertest, отдельная БД telemost_test (см. .env.test)
+npm test   # node:test + supertest, отдельная БД videocall_test (см. .env.test)
 ```
 
-Тесты создают/дропают таблицы в `telemost_test` перед каждым тестом — основной БД не касаются.
+Тесты создают/дропают таблицы в `videocall_test` перед каждым тестом — основной БД не касаются.
 
 ## Структура проекта
 

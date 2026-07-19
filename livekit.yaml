@@ -39,4 +39,4 @@ audio:
 # Секрет должен совпадать с LIVEKIT_API_SECRET в server/.env.
 # Только для локалки — в прод такой секрет не тащим.
 keys:
-  telemost: 08a47c869150b98b807c9fc0ad6b58bf73884534d6fcfefdf1105e3a8f6289c1
+  videocall: 08a47c869150b98b807c9fc0ad6b58bf73884534d6fcfefdf1105e3a8f6289c1

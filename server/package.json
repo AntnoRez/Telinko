@@ -1,7 +1,7 @@
 {
-  "name": "telemost-server",
+  "name": "videocall-server",
   "version": "1.0.0",
-  "description": "Backend for Telemost clone (учебный проект)",
+  "description": "Backend for VideoCall (учебный клон Телемоста)",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

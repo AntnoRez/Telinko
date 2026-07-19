@@ -13,7 +13,7 @@ const validUser = {
 };
 
 // Перед КАЖДЫМ тестом обнуляем схему тестовой БД — чтобы тесты не влияли друг на друга.
-// force: true дропает и заново создаёт таблицы. Допустимо ТОЛЬКО на telemost_test!
+// force: true дропает и заново создаёт таблицы. Допустимо ТОЛЬКО на videocall_test!
 beforeEach(async () => {
   await sequelize.sync({ force: true });
 });
