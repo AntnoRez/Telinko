@@ -47,10 +47,13 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange, title, pop
 
   // Позиция попапа. Начинается вплотную к кнопке (без margin), зазор — через padding,
   // чтобы область наведения была непрерывной (курсор доходит до слайдера без обрыва).
+  // 'up': привязка к ЛЕВОМУ краю кнопки (раскрытие вправо), а не центрирование —
+  // иначе у кнопки мастер-громкости (крайняя слева) попап половиной уходил за левый
+  // край экрана на узких (мобильных) экранах.
   const popupPos =
     popup === 'right'
       ? 'left-full top-1/2 -translate-y-1/2 pl-2'
-      : 'bottom-full left-1/2 -translate-x-1/2 pb-2'
+      : 'bottom-full left-0 pb-2'
 
   return (
     <div className="group/vol relative flex items-center text-white">
