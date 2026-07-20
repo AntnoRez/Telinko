@@ -16,3 +16,12 @@
 .lk-participant-tile::after {
   transition: border-width 0s 0.25s !important;
 }
+
+/* Видео показываем ЦЕЛИКОМ (contain), а не обрезаем по краям (у LiveKit по
+   умолчанию cover). Причина: на iPhone/Safari cover резал верх и низ вертикального
+   видео, тогда как Android показывал кадр целиком. contain даёт одинаковый
+   результат на всех устройствах — весь кадр виден, недостающее по бокам заливается
+   чёрным (фон плитки). */
+.lk-participant-media-video {
+  object-fit: contain !important;
+}
