@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { AccessToken } from 'livekit-server-sdk';
 import { Room, Message, User } from '../models/index.js';
 import { generateRoomCode } from '../utils/roomCode.js';
@@ -102,16 +103,23 @@ export async function getLivekitToken(req, res) {
       return res.status(404).json({ error: 'Комната не найдена' });
     }
 
-    // 2. Собираем токен. identity — кто это (id юзера), name — отображаемое имя.
-    // identity стабильна на юзера СОЗНАТЕЛЬНО: LiveKit держит одно соединение на
-    // identity, поэтому новый вход в звонок (вторая вкладка/другой девайс) заменяет
-    // предыдущий. Это «одно присутствие на аккаунт»: нет эха от двух микрофонов
-    // рядом, а при обрыве сети перезаход сразу вытесняет повисшего «призрака».
+    // 2. Собираем токен. identity — кто это, name — отображаемое имя.
+    // LiveKit держит ОДНО соединение на identity: второй вход с тем же identity
+    // вышибает первый. Чтобы в один звонок можно было зайти с РАЗНЫХ устройств одного
+    // аккаунта, добавляем к userId суффикс устройства — у каждого устройства свой
+    // identity, они сосуществуют. deviceId приходит от клиента (sessionStorage) и
+    // стабилен в пределах вкладки/устройства, поэтому перезаход с ТОГО ЖЕ устройства
+    // вытесняет своего же «призрака» (не плодит их). Значение клиента не доверяем:
+    // чистим до безопасного набора и режем длину; userId-префикс берём из токена, так
+    // что подделать чужую identity нельзя (максимум столкнёшься со своим устройством).
+    const rawDevice = typeof req.body?.deviceId === 'string' ? req.body.deviceId : '';
+    const deviceId = rawDevice.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || crypto.randomUUID();
+
     const at = new AccessToken(
       process.env.LIVEKIT_API_KEY,
       process.env.LIVEKIT_API_SECRET,
       {
-        identity: String(req.user.id), // LiveKit ждёт строку
+        identity: `${req.user.id}__${deviceId}`, // userId + устройство → уникально на устройство
         name: req.user.displayName,
       }
     );

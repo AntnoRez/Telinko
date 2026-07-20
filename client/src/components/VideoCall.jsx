@@ -22,6 +22,21 @@ import CallAudio from './CallAudio'
 import ParticipantTileControls from './ParticipantTileControls'
 import VolumeControl from './VolumeControl'
 
+// Стабильный на вкладку идентификатор устройства. Живёт в sessionStorage: переживает
+// перезагрузку страницы, но у каждой вкладки/устройства свой. Нужен, чтобы в один
+// звонок можно было зайти с РАЗНЫХ устройств (сервер клеит его в LiveKit identity —
+// у каждого устройства свой identity, они сосуществуют), и при этом перезаход с ТОГО ЖЕ
+// устройства не плодил «призраков», а вытеснял своего же. crypto.randomUUID доступен
+// в защищённом контексте (https/localhost) — у нас и прод, и dev такие.
+function getDeviceId() {
+  let id = sessionStorage.getItem('lk-device-id')
+  if (!id) {
+    id = crypto.randomUUID()
+    sessionStorage.setItem('lk-device-id', id)
+  }
+  return id
+}
+
 // Монохромная иконка «развернуть / свернуть» (углы наружу / внутрь).
 function FullscreenIcon({ active }) {
   return (
@@ -164,7 +179,7 @@ function VideoCall({ code, onLeave }) {
     let cancelled = false
 
     api
-      .post(`/api/rooms/${code}/livekit-token`)
+      .post(`/api/rooms/${code}/livekit-token`, { deviceId: getDeviceId() })
       .then((res) => {
         if (cancelled) return
         setToken(res.data.token)
