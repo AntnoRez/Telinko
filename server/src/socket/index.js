@@ -9,6 +9,12 @@ const MAX_MESSAGE_LENGTH = 5000; // символов; больше — молч�
 const FLOOD_WINDOW_MS = 10_000; // окно антифлуда
 const FLOOD_MAX_MESSAGES = 15; // максимум сообщений с одного сокета за окно
 
+// Сколько комната живёт ПУСТОЙ, прежде чем удалиться. Грейс-период нужен, чтобы
+// обновление страницы (F5) и короткий обрыв сети не убивали комнату: при рефреше сокет
+// на секунду отключается и тут же переподключается. Удаляли бы мгновенно — комната
+// исчезала бы на каждом одиночном рефреше. Переподключение отменяет запланированное удаление.
+const ROOM_EMPTY_TTL_MS = 60_000;
+
 // Разбираем строку заголовка Cookie ("token=abc; other=xyz") в объект { token: 'abc', ... }.
 // Своя мини-функция, потому что у сокета нет cookie-parser, как у Express.
 function parseCookie(header) {
@@ -78,6 +84,49 @@ export function initSocket(server) {
       code,
       participants: [...byUser.values()],
     });
+
+    // Возвращаем число оставшихся УНИКАЛЬНЫХ участников — вызывающий (disconnecting)
+    // по нему решает, не пора ли планировать удаление опустевшей комнаты.
+    return byUser.size;
+  }
+
+  // --- Удаление опустевших комнат ---
+  // code -> таймер отложенного удаления. Живёт в памяти процесса (переживать рестарт
+  // и не должно: после рестарта все сокеты отваливаются, а брошенные комнаты подберёт
+  // будущая cron-чистка по lastActivityAt).
+  const deletionTimers = new Map();
+
+  // Запланировать удаление комнаты через грейс-период. Если удаление уже запланировано —
+  // не дублируем таймер.
+  function scheduleRoomCleanup(code) {
+    if (deletionTimers.has(code)) return;
+    const timer = setTimeout(async () => {
+      deletionTimers.delete(code);
+      try {
+        // Перепроверяем: за грейс-период кто-то мог зайти (рефреш/переподключение/новый гость).
+        const sockets = await io.in(code).fetchSockets();
+        if (sockets.length > 0) return; // снова не пусто — комнату оставляем
+
+        // Пусто — удаляем комнату и её сообщения. Явно чистим сообщения, не полагаясь на
+        // FK-каскад: так удаление предсказуемо независимо от того, как создавалась схема.
+        const room = await Room.findOne({ where: { code } });
+        if (!room) return; // уже удалена
+        await Message.destroy({ where: { roomId: room.id } });
+        await room.destroy();
+      } catch (err) {
+        console.error('room cleanup error:', err.message);
+      }
+    }, ROOM_EMPTY_TTL_MS);
+    deletionTimers.set(code, timer);
+  }
+
+  // Отменить запланированное удаление (кто-то вошёл в комнату раньше срока).
+  function cancelRoomCleanup(code) {
+    const timer = deletionTimers.get(code);
+    if (timer) {
+      clearTimeout(timer);
+      deletionTimers.delete(code);
+    }
   }
 
   // --- События уже авторизованного сокета ---
@@ -95,6 +144,7 @@ export function initSocket(server) {
       if (!room) return;
 
       socket.join(code); // добавиться в комнату
+      cancelRoomCleanup(code); // кто-то вошёл — отменяем отложенное удаление, если было
       await broadcastPresence(code); // разослать обновлённый состав всем в комнате
     });
 
@@ -148,8 +198,11 @@ export function initSocket(server) {
       // socket.rooms содержит и личную комнату сокета (== socket.id) — её пропускаем.
       for (const code of socket.rooms) {
         if (code === socket.id) continue;
-        // Пересчитываем состав БЕЗ уходящего сокета и шлём оставшимся.
-        broadcastPresence(code, socket.id);
+        // Пересчитываем состав БЕЗ уходящего сокета и шлём оставшимся. Если не осталось
+        // никого — планируем удаление комнаты (с грейс-периодом, см. scheduleRoomCleanup).
+        broadcastPresence(code, socket.id).then((remaining) => {
+          if (remaining === 0) scheduleRoomCleanup(code);
+        });
       }
     });
   });
