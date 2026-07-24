@@ -1,11 +1,14 @@
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { User } from '../models/index.js';
 import { signToken } from '../utils/jwt.js';
 
 // Имя cookie и её настройки — в одном месте, чтобы совпадали при установке и удалении.
 // ВАЖНО: то же имя ('token') читает middleware requireAuth.
-const COOKIE_NAME = 'token';
-const cookieOptions = {
+// Экспортируем имя и настройки cookie: их переиспользует githubAuthController, чтобы GitHub-вход
+// ставил ТУ ЖЕ сессионную cookie 'token' с идентичными параметрами (единый источник правды).
+export const COOKIE_NAME = 'token';
+export const cookieOptions = {
   httpOnly: true, // JS в браузере не может прочитать cookie → защита от XSS-кражи токена
   sameSite: 'lax', // не отправлять cookie на сторонние сайты (базовая защита от CSRF)
   // secure: слать cookie только по https. Управляется через .env: на проде с TLS
@@ -24,8 +27,10 @@ const EMAIL_RE = /^\S+@\S+\.\S+$/;
 const DUMMY_HASH = bcrypt.hashSync('dummy-password-never-matches', 10);
 
 // Отдаём наружу юзера БЕЗ passwordHash — хеш клиенту не нужен и не должен утекать.
+// guest отдаём: по нему клиент решает, можно ли нажать «Я организатор» (гостю — нельзя, нужен
+// реальный аккаунт). Права модерации = ты ли организатор комнаты (user.id === room.organizerId).
 function publicUser(user) {
-  return { id: user.id, email: user.email, displayName: user.displayName };
+  return { id: user.id, email: user.email, displayName: user.displayName, guest: user.guest };
 }
 
 // POST /api/auth/register
@@ -77,6 +82,77 @@ export async function register(req, res) {
     // Сюда попадает только неожиданное (валидацию мы уже прошли выше).
     // Наружу — генерик: err.message может содержать детали БД, клиенту они не положены.
     console.error('register error:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// POST /api/auth/guest — быстрый вход ГОСТЕМ (без регистрации): только имя.
+// Гость — обычный User с guest:true (МОЖЕТ создавать комнаты и заходить, но НЕ может стать
+// организатором) и temporary:true (удалится по простою). Пароля/email нет → залогиниться под ним
+// нельзя, это чистая сессия («рандомный сессионный ключ»). Эта дверь — для входа/создания БЕЗ
+// логина; чтобы получить модерку, гость жмёт «Я организатор» и логинится (становясь реальным аккаунтом).
+export async function guestSession(req, res) {
+  try {
+    let { displayName } = req.body;
+
+    if (typeof displayName !== 'string') {
+      return res.status(400).json({ error: 'Укажи имя' });
+    }
+    displayName = displayName.trim();
+    if (!displayName) {
+      return res.status(400).json({ error: 'Укажи имя' });
+    }
+    if (displayName.length > 50) {
+      return res.status(400).json({ error: 'Имя слишком длинное (до 50 символов)' });
+    }
+
+    // email/passwordHash не задаём — остаются null (гость без учётных данных).
+    const user = await User.create({ displayName, guest: true, temporary: true });
+
+    const token = signToken({ userId: user.id });
+    res.cookie(COOKIE_NAME, token, cookieOptions);
+    res.status(201).json({ user: publicUser(user) });
+  } catch (err) {
+    console.error('guestSession error:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// POST /api/auth/quick — одноклик-регистрация ОРГАНИЗАТОРА: сервер сам придумывает логин
+// (синтетический email) и пароль, чтобы не проходить обычную регистрацию. Это реальный
+// аккаунт (guest:false) → МОЖЕТ стать организатором комнаты (нажать «Я организатор» → модератор;
+// модератор = organizerId). temporary — по галочке «удалить после сессий». Логин+пароль возвращаем
+// ОДИН РАЗ: захочешь вернуться — войдёшь ими через /login.
+export async function quickRegister(req, res) {
+  try {
+    let { displayName, temporary } = req.body;
+
+    displayName = typeof displayName === 'string' ? displayName.trim() : '';
+    if (!displayName) displayName = 'Организатор'; // имя не обязательно (в prejoin его обычно вводят)
+    if (displayName.length > 50) {
+      return res.status(400).json({ error: 'Имя слишком длинное (до 50 символов)' });
+    }
+
+    // Рандомные креды. email синтетический, но валидный по формату и практически уникальный
+    // (48 бит энтропии в локальной части — коллизия исчезающе маловероятна).
+    const email = `q-${crypto.randomBytes(6).toString('hex')}@temp.telinko.online`;
+    const password = crypto.randomBytes(9).toString('base64url'); // ~12 символов
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      email,
+      passwordHash,
+      displayName,
+      guest: false, // реальный аккаунт → может модерировать
+      temporary: temporary === true, // галочка «удалить после сессий»
+    });
+
+    const token = signToken({ userId: user.id });
+    res.cookie(COOKIE_NAME, token, cookieOptions);
+    // Креды в открытом виде — ЕДИНСТВЕННЫЙ раз, когда юзер может их узнать (по HTTPS, себе же).
+    res.status(201).json({ user: publicUser(user), credentials: { email, password } });
+  } catch (err) {
+    console.error('quickRegister error:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }

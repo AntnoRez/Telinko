@@ -18,23 +18,11 @@ export const Secret = sequelize.define('Secret', {
     type: DataTypes.STRING, // вектор инициализации AES-GCM (НЕ секрет)
     allowNull: false,
   },
-  salt: {
-    type: DataTypes.STRING, // соль для PBKDF2 (НЕ секрет)
-    allowNull: false,
-  },
-  hasPassword: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false, // был ли добавлен пароль поверх ключа из URL
-  },
-  burnAfterRead: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: true, // удалить после первого прочтения
-  },
   expiresAt: {
     type: DataTypes.DATE,
     allowNull: true, // срок жизни; null = бессрочно
   },
 });
+// salt/hasPassword убраны: пароля больше нет, ключ целиком в URL (см. utils/crypto.js).
+// burnAfterRead убран: секрет ВСЕГДА сгорает после первого прочтения (см. consumeSecret).
 // createdAt, updatedAt Sequelize добавит сам. Свой строковый id — автоинкремент отключён.

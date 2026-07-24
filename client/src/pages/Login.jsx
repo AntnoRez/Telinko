@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { safeRedirect } from '../utils/redirect'
+import { GithubIcon } from '../components/icons'
 
 function Login() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
+  const loginWithGithub = useAuthStore((s) => s.loginWithGithub)
   const [searchParams] = useSearchParams()
   const redirect = searchParams.get('redirect') // куда вернуть после входа (или null)
 
@@ -24,6 +26,19 @@ function Login() {
     } catch (err) {
       setError(err.response?.data?.error || 'Не удалось войти')
     } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleGithub() {
+    setError(null)
+    setSubmitting(true)
+    try {
+      await loginWithGithub()
+      navigate(safeRedirect(redirect)) // успех → куда шёл (комната) или на главную
+    } catch (err) {
+      // Закрытое окно — это не ошибка входа, не пугаем красным текстом.
+      if (err?.message !== 'Окно GitHub закрыто') setError('Не удалось войти через GitHub')
       setSubmitting(false)
     }
   }
@@ -61,6 +76,20 @@ function Login() {
           className="bg-blue-600 text-white rounded-lg py-2 font-medium hover:bg-blue-700 disabled:opacity-50"
         >
           {submitting ? 'Входим…' : 'Войти'}
+        </button>
+
+        <div className="flex items-center gap-3 text-xs text-gray-400">
+          <span className="h-px flex-1 bg-gray-200" /> или <span className="h-px flex-1 bg-gray-200" />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGithub}
+          disabled={submitting}
+          className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 py-2 font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <GithubIcon className="w-5 h-5" />
+          Войти через GitHub
         </button>
 
         <p className="text-sm text-gray-500 text-center">

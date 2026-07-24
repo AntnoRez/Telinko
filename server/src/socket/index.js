@@ -1,7 +1,9 @@
 // Какое событие какую функцию выполняет
 import { Server } from 'socket.io';
+import { Op } from 'sequelize';
 import { verifyToken } from '../utils/jwt.js';
 import { User, Room, Message } from '../models/index.js';
+import { deleteObjects } from '../config/s3.js';
 
 // Лимиты на сообщения. REST-тело ограничено в app.js (150kb), но сокет — отдельная
 // дверь, и без своих лимитов через неё пролезало бы до 1 МБ (дефолт socket.io).
@@ -29,6 +31,13 @@ function parseCookie(header) {
   return out;
 }
 
+// Ссылка на текущий io — чтобы другие модули (напр. roomController при «Я организатор»)
+// могли слать события в комнаты (call:started и т.п.), не таская io через параметры.
+let ioRef = null;
+export function getIO() {
+  return ioRef;
+}
+
 // Поднимает socket.io поверх http-сервера и настраивает авторизацию + события чата.
 export function initSocket(server) {
   const io = new Server(server, {
@@ -41,6 +50,7 @@ export function initSocket(server) {
     // socket.io отбросит сам, ещё до наших обработчиков.
     maxHttpBufferSize: 32 * 1024,
   });
+  ioRef = io; // сохраняем для getIO() (доступ к io из контроллеров)
 
   // --- Авторизация соединения ---
   // io.use — middleware, срабатывает ОДИН раз при подключении сокета (аналог requireAuth).
@@ -111,6 +121,18 @@ export function initSocket(server) {
         // FK-каскад: так удаление предсказуемо независимо от того, как создавалась схема.
         const room = await Room.findOne({ where: { code } });
         if (!room) return; // уже удалена
+
+        // Сначала удаляем файлы вложений из MinIO — иначе объекты осиротеют.
+        const withFiles = await Message.findAll({
+          where: { roomId: room.id, attachmentKey: { [Op.ne]: null } },
+          attributes: ['attachmentKey'],
+        });
+        if (withFiles.length) {
+          await deleteObjects(withFiles.map((m) => m.attachmentKey)).catch((e) =>
+            console.error('attachment cleanup error:', e.message)
+          );
+        }
+
         await Message.destroy({ where: { roomId: room.id } });
         await room.destroy();
       } catch (err) {
@@ -148,19 +170,39 @@ export function initSocket(server) {
       await broadcastPresence(code); // разослать обновлённый состав всем в комнате
     });
 
-    // Прислали сообщение: { code, text }.
+    // Прислали сообщение: { code, text, attachment? }. attachment (опц.):
+    // { key, type, name, size } — метаданные загруженного файла (см. attachmentController).
     socket.on('message:send', async (data) => {
       try {
         // Валидация входа: клиенту мы не доверяем, даже авторизованному.
-        // Кривой payload (не объект, не строки, слишком длинно) — молча отбрасываем.
         if (!data || typeof data !== 'object') return;
         const { code, text } = data;
-        if (typeof code !== 'string' || typeof text !== 'string') return;
-        if (!text.trim()) return; // пустое не сохраняем
-        if (text.length > MAX_MESSAGE_LENGTH) return;
+        if (typeof code !== 'string') return;
+        const bodyText = typeof text === 'string' ? text.trim() : '';
+        if (bodyText.length > MAX_MESSAGE_LENGTH) return;
+
+        // Вложение принимаем, ТОЛЬКО если оно валидное и его ключ принадлежит ЭТОЙ комнате.
+        // key задаёт клиент → без проверки префикса можно было бы подсунуть файл чужой комнаты.
+        let attachment = null;
+        const a = data.attachment;
+        if (a && typeof a === 'object') {
+          if (
+            typeof a.key === 'string' &&
+            a.key.startsWith(`rooms/${code}/`) &&
+            typeof a.type === 'string' &&
+            typeof a.name === 'string' &&
+            typeof a.size === 'number'
+          ) {
+            attachment = a;
+          } else {
+            return; // вложение есть, но кривое — не сохраняем
+          }
+        }
+
+        // Пусто и без вложения — игнорируем.
+        if (!bodyText && !attachment) return;
 
         // Антифлуд: не больше FLOOD_MAX_MESSAGES за FLOOD_WINDOW_MS с одного сокета.
-        // Оставляем в списке только «свежие» отметки времени и смотрим, сколько их.
         const now = Date.now();
         socket.data.msgTimes = socket.data.msgTimes.filter((t) => now - t < FLOOD_WINDOW_MS);
         if (socket.data.msgTimes.length >= FLOOD_MAX_MESSAGES) return;
@@ -169,23 +211,32 @@ export function initSocket(server) {
         const room = await Room.findOne({ where: { code } });
         if (!room) return; // нет такой комнаты — игнорируем
 
-        // 1. сохраняем в БД
+        // 1. сохраняем в БД. authorName — снимок имени: сообщение переживёт удаление автора.
         const message = await Message.create({
           roomId: room.id,
           userId: socket.data.userId,
-          text: text.trim(),
+          authorName: socket.data.displayName,
+          text: bodyText || null,
+          attachmentKey: attachment?.key || null,
+          attachmentType: attachment?.type || null,
+          attachmentName: attachment?.name || null,
+          attachmentSize: attachment?.size || null,
         });
 
         // 2. отмечаем активность комнаты (задел под чистку node-cron)
         room.lastActivityAt = new Date();
         await room.save();
 
-        // 3. рассылаем ВСЕМ в комнате (включая отправителя) — в том же виде, что REST-история
+        // 3. рассылаем ВСЕМ в комнате. key наружу НЕ отдаём — только type/name/size + id,
+        //    по id клиент строит ссылку на наш эндпоинт раздачи.
         io.to(code).emit('message:new', {
           id: message.id,
           text: message.text,
           createdAt: message.createdAt,
           user: { id: socket.data.userId, displayName: socket.data.displayName },
+          attachment: attachment
+            ? { type: attachment.type, name: attachment.name, size: attachment.size }
+            : null,
         });
       } catch (err) {
         console.error('message:send error:', err.message);
@@ -195,6 +246,10 @@ export function initSocket(server) {
     // 'disconnecting' срабатывает, пока сокет ЕЩЁ в своих комнатах —
     // тут мы знаем, откуда он уходит. В 'disconnect' он уже вышел и комнат не знает.
     socket.on('disconnecting', () => {
+      // Отмечаем «последний раз онлайн» — с этого момента идёт отсчёт простоя для cron-чистки
+      // temp-аккаунтов. Пока юзер держит хоть один сокет, cron его не тронет (см. cleanup.js).
+      User.update({ lastSeenAt: new Date() }, { where: { id: socket.data.userId } }).catch(() => {});
+
       // socket.rooms содержит и личную комнату сокета (== socket.id) — её пропускаем.
       for (const code of socket.rooms) {
         if (code === socket.id) continue;

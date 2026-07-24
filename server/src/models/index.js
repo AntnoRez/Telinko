@@ -12,7 +12,10 @@ Room.hasMany(Message, { foreignKey: 'roomId', onDelete: 'CASCADE' });
 Message.belongsTo(Room, { foreignKey: 'roomId' });
 
 // Юзер написал много сообщений; у сообщения один автор.
-User.hasMany(Message, { foreignKey: 'userId' });
+// onDelete: 'SET NULL' — удаляем temp-юзера по простою → его сообщения НЕ удаляются, а теряют
+// автора (userId → null). Имя при этом сохранится в Message.authorName (снимок). Требует
+// Message.userId nullable (см. Message.js).
+User.hasMany(Message, { foreignKey: 'userId', onDelete: 'SET NULL' });
 Message.belongsTo(User, { foreignKey: 'userId' });
 
 // onDelete: 'CASCADE' у Room→Message означает: удалим комнату — её сообщения

@@ -1,1 +1,22 @@
 @import "tailwindcss";
+
+/* Тёмный скроллбар для панелей на тёмном фоне (чат, участники). По умолчанию ОС рисует
+   светлый — на тёмном фоне это бельмо. Firefox — scrollbar-color; WebKit/Blink — псевдоэлементы. */
+.dark-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #525252 transparent; /* thumb / track */
+}
+.dark-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dark-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dark-scroll::-webkit-scrollbar-thumb {
+  background: #525252; /* neutral-600 */
+  border-radius: 4px;
+}
+.dark-scroll::-webkit-scrollbar-thumb:hover {
+  background: #737373; /* neutral-500 */
+}

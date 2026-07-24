@@ -25,3 +25,28 @@
 .lk-participant-media-video {
   object-fit: contain !important;
 }
+
+/* Нижний тулбар звонка: делаем кнопки чуть крупнее и приводим ВСЕ иконки к одному размеру,
+   независимо от того, задан ли у svg свой width/height (CSS перебивает атрибуты). Скоуп —
+   .videocall-toolbar, чтобы не задеть кнопки в плитках участников и попапах. */
+.videocall-toolbar .lk-button,
+.videocall-toolbar .lk-disconnect-button {
+  padding: 0.6rem 0.75rem;
+  font-size: 1.05rem;
+}
+.videocall-toolbar .lk-button svg,
+.videocall-toolbar .lk-disconnect-button svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+/* Меню выбора устройства ▼ склеено с кнопкой (.lk-button-group) — стрелку оставляем помельче,
+   чтобы она читалась как «довесок» к иконке, а не как равнозначная кнопка. */
+.videocall-toolbar .lk-button-group-menu .lk-button svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+/* Кнопки бара не сжимаются и не деформируются — при нехватке места внешний контейнер
+   прокручивается по горизонтали (см. overflow-x-auto), а не рвёт ряд на две строки. */
+.videocall-toolbar > * {
+  flex: 0 0 auto;
+}

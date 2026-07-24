@@ -10,6 +10,7 @@
     "test": "node --env-file=.env.test --test \"tests/**/*.test.js\""
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1093.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -19,6 +20,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "livekit-server-sdk": "^2.17.0",
+    "multer": "^2.2.0",
     "pg": "^8.12.0",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.3",

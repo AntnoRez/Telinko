@@ -9,6 +9,7 @@ import Lobby from './pages/Lobby'
 import Room from './pages/Room'
 import SecretCreate from './pages/SecretCreate'
 import SecretView from './pages/SecretView'
+import GithubOauthDone from './pages/GithubOauthDone'
 
 function App() {
   const fetchMe = useAuthStore((s) => s.fetchMe)
@@ -28,8 +29,8 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Видео-инструмент: только для авторизованных. Лобби переехало /lobby → /video,
-          ссылки на комнаты /room/:code оставлены как есть (короткие, шарятся). */}
+      {/* Лобби (создать комнату / войти по коду) — только для авторизованных реальных
+          аккаунтов: создавать комнаты может лишь не-гость (он же станет модератором). */}
       <Route
         path="/video"
         element={
@@ -38,14 +39,13 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/room/:code"
-        element={
-          <ProtectedRoute>
-            <Room />
-          </ProtectedRoute>
-        }
-      />
+      {/* Комната — ПУБЛИЧНАЯ: по ссылке заходит и гость без аккаунта. Личность (гость или
+          реальный аккаунт) выясняет prejoin-экран (Фаза 2): нет сессии → заводит гостя;
+          есть cookie → входит собой. Поэтому ProtectedRoute здесь НЕ нужен. */}
+      <Route path="/room/:code" element={<Room />} />
+
+      {/* Финал GitHub-OAuth: сюда сервер редиректит popup, страница закрывает окно. */}
+      <Route path="/oauth/github" element={<GithubOauthDone />} />
 
       {/* Секретные ссылки — публичные. Создание + просмотр. */}
       <Route path="/secret" element={<SecretCreate />} />

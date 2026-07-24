@@ -5,6 +5,7 @@ import app from './app.js';
 import { connectDB } from './config/db.js';
 import { syncModels } from './models/index.js';
 import { initSocket } from './socket/index.js';
+import { startCleanupJob } from './jobs/cleanup.js';
 
 const PORT = process.env.PORT || 4000;
 
@@ -22,6 +23,8 @@ async function start() {
 
     await syncModels(); // создаёт таблицы по моделям, если их ещё нет
     console.log('Модели синхронизированы');
+
+    startCleanupJob(); // периодическая чистка протухших temp-аккаунтов
 
     // Слушаем на server (не app!) — чтобы работали и REST, и socket.io.
     server.listen(PORT, () => {

@@ -1,12 +1,13 @@
 // Клиентское шифрование секретов (zero-knowledge). Всё происходит в браузере через
-// Web Crypto API — сервер видит только шифротекст + несекретные iv/salt.
+// Web Crypto API — сервер видит только шифротекст + несекретный iv.
 //
-// Схема:
-//   urlKey (32 байта, случайные) → живёт в URL после #, на сервер НЕ уходит
-//   salt   (16 байт) + iv (12 байт) → на сервер (это НЕ секреты)
-//   aesKey = PBKDF2(urlKey [+ пароль], salt, 100k, SHA-256)
-//   ciphertext = AES-GCM(aesKey, iv, текст)
-// Пароль (опционально) подмешивается в PBKDF2 — тогда без него ключ не собрать.
+// Схема (без пароля — ключ целиком в ссылке):
+//   urlKey (32 случайных байта) → живёт в URL после #, на сервер НЕ уходит.
+//                                 Это сразу и есть 256-битный AES-ключ.
+//   iv (12 байт) → на сервер (это НЕ секрет).
+//   ciphertext = AES-GCM(urlKey, iv, текст)
+// PBKDF2/пароль/соль убраны намеренно: urlKey — уже полноценный случайный ключ, растягивать
+// (как слабый пароль) нечего. Кто получил ссылку целиком — тот и расшифрует.
 
 // --- base64url <-> байты (url-безопасно: без +, /, =) ---
 function bytesToBase64url(bytes) {
@@ -27,35 +28,17 @@ function randomBytes(n) {
   return crypto.getRandomValues(new Uint8Array(n))
 }
 
-// Собираем AES-ключ из ключа-из-URL (+ пароль, если задан) и соли через PBKDF2.
-// PBKDF2 нужен, чтобы чисто скомбинировать urlKey + пароль в один ключ и растянуть
-// слабый пароль (защита от перебора).
-async function deriveKey(urlKeyBytes, password, saltBytes) {
-  const enc = new TextEncoder()
-  const pwBytes = password ? enc.encode(password) : new Uint8Array(0)
-
-  // материал = urlKey ++ пароль
-  const material = new Uint8Array(urlKeyBytes.length + pwBytes.length)
-  material.set(urlKeyBytes, 0)
-  material.set(pwBytes, urlKeyBytes.length)
-
-  const baseKey = await crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' },
-    baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  )
+// urlKey (32 байта) импортируем напрямую как AES-GCM ключ — без деривации.
+function importAesKey(urlKeyBytes) {
+  return crypto.subtle.importKey('raw', urlKeyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
 }
 
-// Зашифровать текст. Возвращает всё, что нужно: urlKey (в ссылку) + блоб/iv/salt (на сервер).
-export async function encryptSecret(text, password) {
+// Зашифровать текст. Возвращает urlKey (в ссылку) + ciphertext/iv (на сервер).
+export async function encryptSecret(text) {
   const urlKey = randomBytes(32)
-  const salt = randomBytes(16)
   const iv = randomBytes(12)
 
-  const key = await deriveKey(urlKey, password, salt)
+  const key = await importAesKey(urlKey)
   const ciphertextBuf = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -66,14 +49,13 @@ export async function encryptSecret(text, password) {
     urlKey: bytesToBase64url(urlKey), // в URL после #
     ciphertext: bytesToBase64url(new Uint8Array(ciphertextBuf)), // на сервер
     iv: bytesToBase64url(iv),
-    salt: bytesToBase64url(salt),
   }
 }
 
-// Расшифровать. Неверный пароль (или повреждённые данные) → AES-GCM бросит исключение
-// (GCM проверяет целостность) → вызывающий код покажет "неверный пароль".
-export async function decryptSecret({ ciphertext, iv, salt }, urlKey, password) {
-  const key = await deriveKey(base64urlToBytes(urlKey), password, base64urlToBytes(salt))
+// Расшифровать. Битый ключ/повреждённые данные → AES-GCM бросит исключение (GCM проверяет
+// целостность) → вызывающий код покажет ошибку.
+export async function decryptSecret({ ciphertext, iv }, urlKey) {
+  const key = await importAesKey(base64urlToBytes(urlKey))
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: base64urlToBytes(iv) },
     key,

@@ -18,10 +18,11 @@ function isExpired(secret) {
   return secret.expiresAt && new Date(secret.expiresAt).getTime() < Date.now();
 }
 
-// POST /api/secrets — создать секрет. Сервер видит только шифроблоб + iv/salt (не plaintext).
+// POST /api/secrets — создать секрет. Сервер видит только шифроблоб + iv (не plaintext).
+// Принимаем ТОЛЬКО тело шифрования + срок: пароля нет, секрет всегда одноразовый.
 export async function createSecret(req, res) {
   try {
-    const { ciphertext, iv, salt, hasPassword, burnAfterRead, ttlSeconds } = req.body;
+    const { ciphertext, iv, ttlSeconds } = req.body;
 
     // Валидация: обязательные поля + лимит размера.
     if (!ciphertext || typeof ciphertext !== 'string') {
@@ -30,7 +31,7 @@ export async function createSecret(req, res) {
     if (ciphertext.length > MAX_CIPHERTEXT) {
       return res.status(413).json({ error: 'Секрет слишком большой' });
     }
-    if (!iv || !salt) {
+    if (!iv) {
       return res.status(400).json({ error: 'Некорректные данные шифрования' });
     }
 
@@ -41,15 +42,7 @@ export async function createSecret(req, res) {
     }
 
     const id = await generateUniqueId();
-    await Secret.create({
-      id,
-      ciphertext,
-      iv,
-      salt,
-      hasPassword: Boolean(hasPassword),
-      burnAfterRead: Boolean(burnAfterRead),
-      expiresAt,
-    });
+    await Secret.create({ id, ciphertext, iv, expiresAt });
 
     res.status(201).json({ id });
   } catch (err) {
@@ -60,7 +53,7 @@ export async function createSecret(req, res) {
   }
 }
 
-// GET /api/secrets/:id/meta — метаданные (есть ли секрет, нужен ли пароль). НЕ сжигает.
+// GET /api/secrets/:id/meta — метаданные (существует ли секрет). НЕ сжигает.
 // Отдаём по GET специально: превью-боты мессенджеров дёрнут их, но секрет не сгорит.
 export async function getMeta(req, res) {
   try {
@@ -69,14 +62,14 @@ export async function getMeta(req, res) {
       if (secret) await secret.destroy(); // протухший — заодно уберём
       return res.json({ exists: false });
     }
-    res.json({ exists: true, hasPassword: secret.hasPassword });
+    res.json({ exists: true });
   } catch (err) {
     console.error('getMeta error:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
 
-// POST /api/secrets/:id — забрать шифроблоб. Сжигает, если burnAfterRead.
+// POST /api/secrets/:id — забрать шифроблоб. ВСЕГДА сжигает (секрет одноразовый).
 // Именно POST, а не GET: боты-превьюшники POST не делают → не сожгут секрет до получателя.
 export async function consumeSecret(req, res) {
   try {
@@ -87,17 +80,15 @@ export async function consumeSecret(req, res) {
     }
 
     // Снимаем данные ДО удаления.
-    const payload = { ciphertext: secret.ciphertext, iv: secret.iv, salt: secret.salt };
+    const payload = { ciphertext: secret.ciphertext, iv: secret.iv };
 
-    if (secret.burnAfterRead) {
-      // Атомарное сжигание. destroy по условию возвращает ЧИСЛО удалённых строк:
-      // два одновременных запроса оба пройдут findByPk выше, но удалить строку
-      // успеет только один — второму DELETE вернёт 0, и он уйдёт с 404.
-      // Без этой проверки оба прочитали бы «одноразовый» секрет (гонка check-then-act).
-      const deleted = await Secret.destroy({ where: { id: secret.id } });
-      if (deleted === 0) {
-        return res.status(404).json({ error: 'Секрет не найден или истёк' });
-      }
+    // Атомарное сжигание. destroy по условию возвращает ЧИСЛО удалённых строк:
+    // два одновременных запроса оба пройдут findByPk выше, но удалить строку успеет
+    // только один — второму DELETE вернёт 0, и он уйдёт с 404. Без этого оба прочитали
+    // бы одноразовый секрет (гонка check-then-act).
+    const deleted = await Secret.destroy({ where: { id: secret.id } });
+    if (deleted === 0) {
+      return res.status(404).json({ error: 'Секрет не найден или истёк' });
     }
 
     res.json(payload);

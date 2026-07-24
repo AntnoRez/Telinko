@@ -11,8 +11,6 @@ function SecretView() {
   const urlKey = window.location.hash.slice(1) // ключ после '#', без самой решётки
 
   const [status, setStatus] = useState('loading') // loading|badlink|notfound|ready|revealed|error
-  const [hasPassword, setHasPassword] = useState(false)
-  const [password, setPassword] = useState('')
   const [secretText, setSecretText] = useState('')
   const [revealing, setRevealing] = useState(false)
   const [error, setError] = useState(null)
@@ -33,7 +31,6 @@ function SecretView() {
           setStatus('notfound')
           return
         }
-        setHasPassword(res.data.hasPassword)
         setStatus('ready')
       })
       .catch(() => {
@@ -73,14 +70,13 @@ function SecretView() {
       }
     }
 
-    // 2b. Расшифровка локально. Неверный пароль → AES-GCM бросит исключение →
-    // юзер вводит пароль заново и пробует ещё раз с тем же сохранённым блобом.
+    // 2b. Расшифровка локально ключом из #. Битый ключ/повреждённые данные → AES-GCM бросит.
     try {
-      const text = await decryptSecret(blobRef.current, urlKey, password)
+      const text = await decryptSecret(blobRef.current, urlKey)
       setSecretText(text)
       setStatus('revealed')
     } catch {
-      setError(hasPassword ? 'Неверный пароль' : 'Не удалось расшифровать секрет')
+      setError('Не удалось расшифровать секрет')
     } finally {
       setRevealing(false)
     }
@@ -128,19 +124,8 @@ function SecretView() {
           {status === 'ready' && (
             <form onSubmit={handleReveal} className="flex flex-col gap-4">
               <p className="text-sm text-gray-500">
-                Нажми, чтобы расшифровать и показать секрет. Если он одноразовый — после этого
-                он сгорит.
+                Нажми, чтобы расшифровать и показать секрет. Он одноразовый — после этого сгорит.
               </p>
-
-              {hasPassword && (
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Пароль к секрету"
-                  className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              )}
 
               {error && <p className="text-sm text-red-600">{error}</p>}
 

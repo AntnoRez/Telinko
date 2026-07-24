@@ -16,17 +16,27 @@ const TTL_OPTIONS = [
 ]
 
 // Переиспользуемая форма создания секрета: шифрует в браузере, шлёт на сервер только
-// шифроблоб, отдаёт готовую ссылку с ключом в #. Используется на странице /secret и
-// в модалке внутри звонка.
-function SecretCreateForm() {
+// шифроблоб, отдаёт готовую ссылку с ключом в #. Используется на странице /secret (светлая)
+// и в модалке внутри звонка (тёмная). Тему переключает проп dark, чтобы не ломать /secret.
+// onCreated(url) (опц.): если задан — вместо блока «ссылка готова» отдаём ссылку наверх
+// (в чате вставляем её в поле сообщения) и не показываем результат внутри формы.
+function SecretCreateForm({ dark = false, onCreated }) {
   const [text, setText] = useState('')
-  const [password, setPassword] = useState('')
-  const [burnAfterRead, setBurnAfterRead] = useState(true)
-  const [ttlIndex, setTtlIndex] = useState(3) // дефолт «1 час»
+  const [ttlIndex, setTtlIndex] = useState(TTL_OPTIONS.length - 1) // дефолт «Бессрочно»
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [resultUrl, setResultUrl] = useState(null)
   const [copied, setCopied] = useState(false)
+
+  // Классы, зависящие от темы. Синие кнопки одинаковы в обеих темах — их не трогаем.
+  const field = dark
+    ? 'border border-neutral-700 bg-neutral-800 text-gray-100 placeholder-gray-500 focus:ring-blue-500'
+    : 'border border-gray-300 focus:ring-blue-400'
+  const labelCls = dark ? 'text-gray-300' : 'text-gray-700'
+  const muted = dark ? 'text-gray-400' : 'text-gray-500'
+  const noteCls = dark ? 'text-gray-300' : 'text-gray-600'
+  const linkBtn = dark ? 'text-gray-400 hover:text-gray-100' : 'text-gray-500 hover:text-gray-800'
+  const errCls = dark ? 'text-red-400' : 'text-red-600'
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -36,20 +46,19 @@ function SecretCreateForm() {
     setSubmitting(true)
     try {
       // 1. Шифруем в браузере. urlKey останется у нас (уйдёт в ссылку), сервер его не увидит.
-      const { urlKey, ciphertext, iv, salt } = await encryptSecret(trimmed, password)
+      const { urlKey, ciphertext, iv } = await encryptSecret(trimmed)
 
-      // 2. На сервер — только шифроблоб + несекретные iv/salt + настройки.
+      // 2. На сервер — только шифроблоб + несекретный iv + срок. Пароля нет, всегда одноразовый.
       const res = await api.post('/api/secrets', {
         ciphertext,
         iv,
-        salt,
-        hasPassword: Boolean(password),
-        burnAfterRead,
         ttlSeconds: TTL_OPTIONS[ttlIndex].seconds,
       })
 
       // 3. Собираем ссылку: id от сервера + ключ в #. Фрагмент (#...) на сервер не отправляется.
-      setResultUrl(`${window.location.origin}/secret/${res.data.id}#${urlKey}`)
+      const url = `${window.location.origin}/secret/${res.data.id}#${urlKey}`
+      if (onCreated) onCreated(url) // чат: вернуть ссылку в поле сообщения
+      else setResultUrl(url) // страница/модалка: показать блок с готовой ссылкой
     } catch {
       setError('Не удалось создать секрет')
     } finally {
@@ -69,9 +78,7 @@ function SecretCreateForm() {
 
   function handleReset() {
     setText('')
-    setPassword('')
-    setBurnAfterRead(true)
-    setTtlIndex(3)
+    setTtlIndex(TTL_OPTIONS.length - 1) // «Бессрочно»
     setResultUrl(null)
     setError(null)
     setCopied(false)
@@ -81,7 +88,7 @@ function SecretCreateForm() {
   if (resultUrl) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-gray-600">
+        <p className={`text-sm ${noteCls}`}>
           Ссылка готова. Ключ шифрования зашит в саму ссылку (после <span className="font-mono">#</span>) —
           на сервер он не попал. Кто откроет ссылку — тот и расшифрует.
         </p>
@@ -90,7 +97,7 @@ function SecretCreateForm() {
             readOnly
             value={resultUrl}
             onFocus={(e) => e.target.select()}
-            className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+            className={`flex-1 min-w-0 rounded-lg px-3 py-2 font-mono text-sm ${field}`}
           />
           <button
             onClick={handleCopy}
@@ -99,15 +106,13 @@ function SecretCreateForm() {
             {copied ? 'Скопировано!' : 'Копировать'}
           </button>
         </div>
-        {burnAfterRead && (
-          <p className="flex items-start gap-1 text-xs text-gray-500">
-            <WarnIcon className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>Сгорает после первого открытия — не проверяй ссылку сам, сразу отдай получателю.</span>
-          </p>
-        )}
+        <p className={`flex items-start gap-1 text-xs ${muted}`}>
+          <WarnIcon className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>Сгорает после первого открытия — не проверяй ссылку сам, сразу отдай получателю.</span>
+        </p>
         <button
           onClick={handleReset}
-          className="self-start text-sm text-gray-500 hover:text-gray-800"
+          className={`self-start text-sm ${linkBtn}`}
         >
           Создать ещё
         </button>
@@ -123,32 +128,15 @@ function SecretCreateForm() {
         onChange={(e) => setText(e.target.value)}
         placeholder="Секрет: пароль, токен, приватная заметка…"
         rows={5}
-        className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        className={`rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${field}`}
       />
 
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Пароль (необязательно)"
-        className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-      />
-
-      <label className="flex items-center gap-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={burnAfterRead}
-          onChange={(e) => setBurnAfterRead(e.target.checked)}
-        />
-        Сжечь после первого прочтения
-      </label>
-
-      <label className="flex items-center gap-2 text-sm text-gray-700">
+      <label className={`flex items-center gap-2 text-sm ${labelCls}`}>
         Срок жизни:
         <select
           value={ttlIndex}
           onChange={(e) => setTtlIndex(Number(e.target.value))}
-          className="rounded-lg border border-gray-300 px-2 py-1"
+          className={`rounded-lg px-2 py-1 ${field}`}
         >
           {TTL_OPTIONS.map((opt, i) => (
             <option key={opt.label} value={i}>
@@ -158,7 +146,7 @@ function SecretCreateForm() {
         </select>
       </label>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className={`text-sm ${errCls}`}>{error}</p>}
 
       <button
         type="submit"
