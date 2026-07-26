@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { roomDisplayName } from '../utils/room'
 import CopyLinkButton from '../components/CopyLinkButton'
+import Avatar from '../components/Avatar'
 
 // Иконки микрофона/камеры (вкл/выкл). currentColor наследует цвет кнопки.
 function MicIcon({ off }) {
@@ -92,7 +93,10 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
   }, [stream])
 
   const trimmed = name.trim()
-  const canJoin = trimmed.length > 0 && !joining
+  // Имя спрашиваем ТОЛЬКО у гостя без сессии: залогиненный (аккаунт или уже заведённый гость)
+  // входит под своим user.displayName, а введённое здесь имя всё равно игнорируется (см. handleJoin).
+  const needsName = !user
+  const canJoin = (needsName ? trimmed.length > 0 : true) && !joining
 
   async function handleJoin() {
     if (!canJoin) return
@@ -111,11 +115,15 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
   }
 
   const displayName = roomDisplayName(code)
-  const initial = (trimmed || '?').charAt(0).toUpperCase()
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gray-900 text-white px-4">
-      <div className="text-center">
+    <div className="relative min-h-screen flex flex-col items-center justify-center gap-6 overflow-hidden bg-neutral-950 text-gray-100 px-4">
+      {/* Индиго-свечение — тот же тёмный вайб, что на главной и в звонке. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[140px]" />
+      </div>
+
+      <div className="relative text-center">
         <h1 className="text-2xl sm:text-3xl font-semibold">Присоединиться к встрече</h1>
         <p className="mt-1 text-gray-400 truncate max-w-xs sm:max-w-md">{displayName}</p>
       </div>
@@ -132,9 +140,14 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
             style={{ transform: 'scaleX(-1)' }} // зеркалим — как в зеркале, привычнее
           />
         ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-pink-600 text-3xl font-semibold">
-            {initial}
-          </div>
+          // Вошедший (аккаунт/гость) — его аватар или буква; гость без сессии — буква по введённому имени.
+          <Avatar
+            userId={user?.id}
+            name={trimmed || user?.displayName}
+            size={80}
+            hasAvatar={user?.avatarVersion != null}
+            version={user?.avatarVersion}
+          />
         )}
 
         {/* Тумблеры мик/камера поверх превью снизу. */}
@@ -164,22 +177,28 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
 
       {mediaError && <p className="text-amber-400 text-sm">{mediaError}</p>}
 
-      {/* Имя + вход. Кнопка активна, когда имя не пустое. Enter — тоже вход. */}
+      {/* Имя (только гостю без сессии) + вход. Enter в поле — тоже вход. */}
       <div className="w-full max-w-md flex flex-col gap-3">
-        <input
-          type="text"
-          placeholder="Пожалуйста, введите своё имя"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-          maxLength={50}
-          className="w-full rounded-lg bg-gray-800 border border-gray-700 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        {needsName ? (
+          <input
+            type="text"
+            placeholder="Пожалуйста, введите своё имя"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+            maxLength={50}
+            className="w-full rounded-lg bg-neutral-800/80 border border-neutral-700 px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        ) : (
+          <p className="text-center text-sm text-gray-400">
+            Вход как <span className="font-medium text-gray-200">{user.displayName}</span>
+          </p>
+        )}
         <button
           type="button"
           onClick={handleJoin}
           disabled={!canJoin}
-          className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {joining ? 'Входим…' : 'Присоединиться к встрече'}
         </button>

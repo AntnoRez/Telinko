@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { safeRedirect } from '../utils/redirect'
-import { GithubIcon } from '../components/icons'
+import { GithubIcon, TelinkoLogo } from '../components/icons'
 
 function Login() {
   const navigate = useNavigate()
@@ -44,12 +44,23 @@ function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-neutral-950 px-4 text-gray-100">
+      {/* Индиго-свечение — единый тёмный вайб. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[140px]" />
+      </div>
+
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-white p-8 rounded-xl shadow flex flex-col gap-4"
+        className="relative w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900/80 p-8 shadow-xl backdrop-blur-sm flex flex-col gap-4"
       >
-        <h1 className="text-2xl font-semibold text-gray-800">Вход</h1>
+        <Link to="/" className="mb-2 flex items-center justify-center gap-2">
+          <TelinkoLogo className="h-8 w-8" />
+          <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+            Telinko
+          </span>
+        </Link>
+        <h1 className="text-center text-2xl font-semibold">Вход</h1>
 
         <input
           type="email"
@@ -57,7 +68,7 @@ function Login() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         <input
           type="password"
@@ -65,38 +76,38 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
 
         <button
           type="submit"
           disabled={submitting}
-          className="bg-blue-600 text-white rounded-lg py-2 font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="rounded-lg bg-indigo-600 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
         >
           {submitting ? 'Входим…' : 'Войти'}
         </button>
 
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="h-px flex-1 bg-gray-200" /> или <span className="h-px flex-1 bg-gray-200" />
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span className="h-px flex-1 bg-neutral-800" /> или <span className="h-px flex-1 bg-neutral-800" />
         </div>
 
         <button
           type="button"
           onClick={handleGithub}
           disabled={submitting}
-          className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 py-2 font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-lg border border-neutral-700 py-2 font-medium text-gray-100 transition hover:bg-neutral-800 disabled:opacity-50"
         >
           <GithubIcon className="w-5 h-5" />
           Войти через GitHub
         </button>
 
-        <p className="text-sm text-gray-500 text-center">
+        <p className="text-sm text-gray-400 text-center">
           Нет аккаунта?{' '}
           <Link
             to={redirect ? `/register?redirect=${encodeURIComponent(redirect)}` : '/register'}
-            className="text-blue-600 hover:underline"
+            className="text-indigo-400 hover:underline"
           >
             Зарегистрироваться
           </Link>

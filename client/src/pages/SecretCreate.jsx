@@ -1,28 +1,41 @@
 import { Link } from 'react-router-dom'
 import SecretCreateForm from '../components/SecretCreateForm'
+import { LockIcon } from '../components/icons'
 
-// Страница создания секрета — тонкая обёртка над переиспользуемой формой.
+// Страница создания секрета — тонкая обёртка над переиспользуемой формой (тёмная тема).
 // Публичная (отправитель может быть не залогинен).
 function SecretCreate() {
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      <header className="flex items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-        <Link to="/" className="text-sm text-gray-500 hover:text-gray-800">
-          ← На главную
-        </Link>
-      </header>
+    <div className="relative min-h-screen overflow-hidden bg-neutral-950 text-gray-100">
+      {/* Индиго-свечение — единый тёмный вайб со звонком и главной. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[140px]" />
+      </div>
 
-      <main className="mx-auto max-w-lg px-4 sm:px-6 py-8">
-        <h1 className="mb-2 text-2xl font-semibold">Секретная ссылка</h1>
-        <p className="mb-6 text-sm text-gray-500">
-          Зашифруй сообщение прямо в браузере и получи одноразовую ссылку. Сервер хранит
-          только шифротекст — содержимое он не видит.
-        </p>
+      <div className="relative">
+        <header className="mx-auto flex max-w-lg items-center px-4 sm:px-6 py-4">
+          <Link to="/" className="text-sm text-gray-400 hover:text-gray-100">
+            ← На главную
+          </Link>
+        </header>
 
-        <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-sm">
-          <SecretCreateForm />
-        </div>
-      </main>
+        <main className="mx-auto max-w-lg px-4 sm:px-6 pb-12">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 ring-1 ring-inset ring-violet-500/20">
+              <LockIcon className="w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-semibold">Секретная ссылка</h1>
+          </div>
+          <p className="mb-6 text-sm text-gray-400">
+            Зашифруй сообщение прямо в браузере и получи одноразовую ссылку. Сервер хранит
+            только шифротекст — содержимое он не видит.
+          </p>
+
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-6 backdrop-blur-sm">
+            <SecretCreateForm dark />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

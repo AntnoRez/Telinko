@@ -1,9 +1,9 @@
 // Какое событие какую функцию выполняет
 import { Server } from 'socket.io';
-import { Op } from 'sequelize';
 import { verifyToken } from '../utils/jwt.js';
 import { User, Room, Message } from '../models/index.js';
-import { deleteObjects } from '../config/s3.js';
+import { encryptText, decryptText } from '../utils/chatCrypto.js';
+import { purgeRoom } from '../utils/roomCleanup.js';
 
 // Лимиты на сообщения. REST-тело ограничено в app.js (150kb), но сокет — отдельная
 // дверь, и без своих лимитов через неё пролезало бы до 1 МБ (дефолт socket.io).
@@ -16,6 +16,10 @@ const FLOOD_MAX_MESSAGES = 15; // максимум сообщений с одн�
 // на секунду отключается и тут же переподключается. Удаляли бы мгновенно — комната
 // исчезала бы на каждом одиночном рефреше. Переподключение отменяет запланированное удаление.
 const ROOM_EMPTY_TTL_MS = 60_000;
+
+// Сколько последних сообщений отдаём при входе в комнату (история чата). Без лимита комната,
+// пожившая пару месяцев, отдавала бы ВСЮ историю одним пакетом.
+const MESSAGES_LIMIT = 100;
 
 // Разбираем строку заголовка Cookie ("token=abc; other=xyz") в объект { token: 'abc', ... }.
 // Своя мини-функция, потому что у сокета нет cookie-parser, как у Express.
@@ -117,24 +121,11 @@ export function initSocket(server) {
         const sockets = await io.in(code).fetchSockets();
         if (sockets.length > 0) return; // снова не пусто — комнату оставляем
 
-        // Пусто — удаляем комнату и её сообщения. Явно чистим сообщения, не полагаясь на
-        // FK-каскад: так удаление предсказуемо независимо от того, как создавалась схема.
+        // Пусто — сносим комнату вместе с сообщениями и файлами вложений (общий хелпер,
+        // тот же используется cron-safety-net для комнат-сирот).
         const room = await Room.findOne({ where: { code } });
         if (!room) return; // уже удалена
-
-        // Сначала удаляем файлы вложений из MinIO — иначе объекты осиротеют.
-        const withFiles = await Message.findAll({
-          where: { roomId: room.id, attachmentKey: { [Op.ne]: null } },
-          attributes: ['attachmentKey'],
-        });
-        if (withFiles.length) {
-          await deleteObjects(withFiles.map((m) => m.attachmentKey)).catch((e) =>
-            console.error('attachment cleanup error:', e.message)
-          );
-        }
-
-        await Message.destroy({ where: { roomId: room.id } });
-        await room.destroy();
+        await purgeRoom(room);
       } catch (err) {
         console.error('room cleanup error:', err.message);
       }
@@ -168,6 +159,31 @@ export function initSocket(server) {
       socket.join(code); // добавиться в комнату
       cancelRoomCleanup(code); // кто-то вошёл — отменяем отложенное удаление, если было
       await broadcastPresence(code); // разослать обновлённый состав всем в комнате
+
+      // История чата — ТОЛЬКО этому сокету и ТОЛЬКО после реального входа в комнату.
+      // Так историю нельзя вытащить, не подключившись (раньше был публичный REST /messages,
+      // который читал любой залогиненный по коду). Приходит и на реконнект (room:join шлётся
+      // заново) → re-sync после обрыва сети, чего REST-загрузка «один раз» не давала.
+      const history = await Message.findAll({
+        where: { roomId: room.id },
+        order: [
+          ['createdAt', 'DESC'],
+          ['id', 'DESC'],
+        ],
+        limit: MESSAGES_LIMIT,
+      });
+      history.reverse(); // клиент ждёт порядок от старых к новым
+      socket.emit('chat:history', {
+        messages: history.map((m) => ({
+          id: m.id,
+          text: decryptText(m.text), // в БД шифротекст → отдаём открытым
+          createdAt: m.createdAt,
+          user: { id: m.userId, displayName: m.authorName || 'Гость' },
+          attachment: m.attachmentKey
+            ? { type: m.attachmentType, name: decryptText(m.attachmentName), size: m.attachmentSize }
+            : null,
+        })),
+      });
     });
 
     // Прислали сообщение: { code, text, attachment? }. attachment (опц.):
@@ -212,14 +228,15 @@ export function initSocket(server) {
         if (!room) return; // нет такой комнаты — игнорируем
 
         // 1. сохраняем в БД. authorName — снимок имени: сообщение переживёт удаление автора.
+        //    text и имя вложения шифруем at-rest (в БД — шифротекст, см. chatCrypto).
         const message = await Message.create({
           roomId: room.id,
           userId: socket.data.userId,
           authorName: socket.data.displayName,
-          text: bodyText || null,
+          text: bodyText ? encryptText(bodyText) : null,
           attachmentKey: attachment?.key || null,
           attachmentType: attachment?.type || null,
-          attachmentName: attachment?.name || null,
+          attachmentName: attachment?.name ? encryptText(attachment.name) : null,
           attachmentSize: attachment?.size || null,
         });
 
@@ -231,7 +248,7 @@ export function initSocket(server) {
         //    по id клиент строит ссылку на наш эндпоинт раздачи.
         io.to(code).emit('message:new', {
           id: message.id,
-          text: message.text,
+          text: bodyText || null, // клиентам — открытый текст (в БД лёг шифротекстом)
           createdAt: message.createdAt,
           user: { id: socket.data.userId, displayName: socket.data.displayName },
           attachment: attachment

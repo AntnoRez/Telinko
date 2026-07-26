@@ -6,8 +6,12 @@ import { connectDB } from './config/db.js';
 import { syncModels } from './models/index.js';
 import { initSocket } from './socket/index.js';
 import { startCleanupJob } from './jobs/cleanup.js';
+import { assertChatKey } from './utils/chatCrypto.js';
 
 const PORT = process.env.PORT || 4000;
+
+// Без валидного CHAT_ENC_KEY чат нельзя шифровать — падаем сразу, а не пишем плейнтекст в БД.
+assertChatKey();
 
 // Создаём http-сервер вручную из Express-приложения.
 // Раньше это делал app.listen неявно; теперь нам нужен сам сервер,

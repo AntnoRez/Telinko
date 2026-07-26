@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '../api/client'
+import { downscaleImage } from '../utils/image'
 
 // Глобальное состояние авторизации. Любой компонент может подписаться
 // на user/loading и вызвать login/register/logout, не прокидывая пропсы.
@@ -97,6 +98,30 @@ export const useAuthStore = create((set, get) => ({
         }
       }, 500)
     })
+  },
+
+  // --- Профиль: сменить имя / аватар (логин не трогаем) ---
+
+  // Сменить отображаемое имя. Возвращённый user содержит новый avatarVersion (не меняется тут).
+  updateProfile: async (displayName) => {
+    const res = await api.patch('/api/users/me', { displayName })
+    set({ user: res.data.user })
+  },
+
+  // Загрузить аватар: сжимаем в браузере до 512px → шлём multipart. Ответ с новым avatarVersion
+  // (в URL ?v=) заставит браузер взять свежую картинку вместо кэша.
+  uploadAvatar: async (file) => {
+    const blob = await downscaleImage(file, 512)
+    const form = new FormData()
+    form.append('avatar', blob, 'avatar.jpg')
+    const res = await api.post('/api/users/me/avatar', form)
+    set({ user: res.data.user })
+  },
+
+  // Убрать аватар — вернётся кружок с буквой.
+  removeAvatar: async () => {
+    const res = await api.delete('/api/users/me/avatar')
+    set({ user: res.data.user })
   },
 
   logout: async () => {

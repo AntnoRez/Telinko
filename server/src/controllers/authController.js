@@ -29,8 +29,17 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password-never-matches', 10);
 // Отдаём наружу юзера БЕЗ passwordHash — хеш клиенту не нужен и не должен утекать.
 // guest отдаём: по нему клиент решает, можно ли нажать «Я организатор» (гостю — нельзя, нужен
 // реальный аккаунт). Права модерации = ты ли организатор комнаты (user.id === room.organizerId).
-function publicUser(user) {
-  return { id: user.id, email: user.email, displayName: user.displayName, guest: user.guest };
+export function publicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    guest: user.guest,
+    // Версия аватара для cache-busting СВОЕГО аватара (в URL ?v=). null = аватара нет →
+    // клиент сразу рисует кружок с буквой, не дёргая эндпоинт. Меняется при любой правке
+    // профиля (updatedAt), так что после смены картинки браузер берёт свежую.
+    avatarVersion: user.avatarKey ? new Date(user.updatedAt).getTime() : null,
+  };
 }
 
 // POST /api/auth/register

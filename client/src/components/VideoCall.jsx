@@ -7,7 +7,6 @@ import {
   MediaDeviceMenu,
   VideoTrack,
   ParticipantName,
-  ParticipantPlaceholder,
   TrackMutedIndicator,
   ConnectionQualityIndicator,
   useTracks,
@@ -25,6 +24,7 @@ import { AudioMixerProvider, useAudioMixer } from './AudioMixerContext'
 import CallAudio from './CallAudio'
 import ParticipantTileControls from './ParticipantTileControls'
 import VolumeControl from './VolumeControl'
+import Avatar from './Avatar'
 import { LockIcon } from './icons'
 
 // Стабильный на вкладку идентификатор устройства. Живёт в sessionStorage: переживает
@@ -126,9 +126,15 @@ function MixerTile() {
     <ParticipantTile trackRef={trackRef} className="group/tile">
       {isVideo && <VideoTrack trackRef={trackRef} />}
 
-      {/* Аватар, когда видео нет (CSS LiveKit сам прячет его при наличии видео). */}
+      {/* Аватар, когда видео нет (CSS LiveKit сам прячет .lk-participant-placeholder при видео).
+          Вместо серого силуэта LiveKit — наш кружок: аватар участника или буква. userId достаём
+          из identity (`${userId}__${deviceId}`), имя — из participant.name. */}
       <div className="lk-participant-placeholder">
-        <ParticipantPlaceholder />
+        {(() => {
+          const p = trackRef.participant
+          const uid = parseInt(p.identity.split('__')[0], 10)
+          return <Avatar userId={Number.isInteger(uid) ? uid : null} name={p.name || p.identity} size={128} />
+        })()}
       </div>
 
       {/* Ник + индикатор выключенного микрофона + качество связи — как в шаблоне. */}
@@ -572,7 +578,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
           icon={<ScreenShareIcon />}
           titleOn="Остановить показ экрана"
           titleOff="Показать экран"
-          color={(on) => (on ? 'text-blue-400' : 'text-white')}
+          color={(on) => (on ? 'text-indigo-400' : 'text-white')}
         />
       ),
     },
@@ -632,7 +638,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
               else await localParticipant.setMicrophoneEnabled(true)
               setAskUnmute(null)
             }}
-            className="rounded bg-blue-600 px-3 py-1 font-medium hover:bg-blue-700"
+            className="rounded bg-indigo-600 px-3 py-1 font-medium hover:bg-indigo-500"
           >
             Включить
           </button>

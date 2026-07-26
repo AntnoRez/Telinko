@@ -1,12 +1,8 @@
 import crypto from 'crypto';
 import { AccessToken } from 'livekit-server-sdk';
-import { Room, Message } from '../models/index.js';
+import { Room } from '../models/index.js';
 import { generateRoomCode } from '../utils/roomCode.js';
 import { getIO } from '../socket/index.js';
-
-// Сколько последних сообщений отдаём при входе в комнату. Без лимита комната,
-// пожившая пару месяцев, отдавала бы ВСЮ историю одним запросом.
-const MESSAGES_LIMIT = 100;
 
 // Разрешённый формат КАСТОМНОГО имени комнаты (когда юзер задаёт своё вместо авто-кода).
 // Идёт в путь URL (/room/:code) → без пробелов и спецсимволов: начинается с буквы/цифры, дальше
@@ -121,46 +117,8 @@ export async function getRoom(req, res) {
   }
 }
 
-// GET /api/rooms/:code/messages — история сообщений комнаты (грузим один раз при входе).
-export async function getMessages(req, res) {
-  try {
-    const room = await Room.findOne({ where: { code: req.params.code } });
-    if (!room) {
-      return res.status(404).json({ error: 'Комната не найдена' });
-    }
-
-    // Берём ПОСЛЕДНИЕ N сообщений: сортируем от новых к старым и режем лимитом,
-    // потом разворачиваем обратно — клиент ждёт порядок «от старых к новым».
-    // id в сортировке — на случай одинаковых createdAt (сообщения в одну миллисекунду).
-    const messages = await Message.findAll({
-      where: { roomId: room.id },
-      order: [
-        ['createdAt', 'DESC'],
-        ['id', 'DESC'],
-      ],
-      limit: MESSAGES_LIMIT,
-    });
-    messages.reverse();
-
-    // Приводим к чистому виду для клиента. Имя берём из снимка authorName — переживает удаление
-    // автора (temp-юзера почистил cron → userId стал null, но имя осталось).
-    const result = messages.map((m) => ({
-      id: m.id,
-      text: m.text,
-      createdAt: m.createdAt,
-      user: { id: m.userId, displayName: m.authorName || 'Гость' },
-      // key наружу не отдаём — клиент строит ссылку раздачи по id сообщения.
-      attachment: m.attachmentKey
-        ? { type: m.attachmentType, name: m.attachmentName, size: m.attachmentSize }
-        : null,
-    }));
-
-    res.json({ messages: result });
-  } catch (err) {
-    console.error('getMessages error:', err);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  }
-}
+// Историю сообщений раздаёт сокет (событие chat:history на room:join), а не REST — так её
+// нельзя вытащить, не подключившись к комнате. См. socket/index.js.
 
 // POST /api/rooms/:code/livekit-token — выдать текущему юзеру токен для входа в видеозвонок.
 // Токен подписан нашим ключом+секретом; LiveKit-сервер проверит подпись и пустит в комнату.

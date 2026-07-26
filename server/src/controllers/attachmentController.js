@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Room, Message } from '../models/index.js';
 import { putObject, getObject } from '../config/s3.js';
+import { decryptText } from '../utils/chatCrypto.js';
 
 // Типы, которые безопасно показывать ВСТРОЕННО (inline) с нашего домена. Всё прочее (html, svg,
 // exe, doc…) отдаём как вложение (attachment) + nosniff — иначе inline-html/svg с нашего origin
@@ -62,7 +63,8 @@ export async function downloadAttachment(req, res) {
 
     const type = message.attachmentType || obj.ContentType || 'application/octet-stream';
     const disposition = isInline(type) ? 'inline' : 'attachment';
-    const filename = encodeURIComponent(message.attachmentName || 'file');
+    // attachmentName в БД зашифровано (at-rest) → расшифровываем для заголовка/скачивания.
+    const filename = encodeURIComponent(decryptText(message.attachmentName) || 'file');
 
     res.setHeader('Content-Type', type);
     res.setHeader('X-Content-Type-Options', 'nosniff');

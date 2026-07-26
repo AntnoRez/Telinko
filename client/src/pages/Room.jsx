@@ -11,6 +11,7 @@ import ChatAttachMenu from '../components/ChatAttachMenu'
 import EmojiPicker from '../components/EmojiPicker'
 import ImageLightbox from '../components/ImageLightbox'
 import VideoPlayer from '../components/VideoPlayer'
+import Avatar from '../components/Avatar'
 import { GithubIcon } from '../components/icons'
 import { roomDisplayName } from '../utils/room'
 
@@ -32,7 +33,7 @@ function renderMessageText(text, mine) {
         href={part}
         target="_blank"
         rel="noopener noreferrer"
-        className={`underline underline-offset-2 break-all ${mine ? 'text-blue-100 hover:text-white' : 'text-blue-300 hover:text-blue-200'}`}
+        className={`underline underline-offset-2 break-all ${mine ? 'text-indigo-100 hover:text-white' : 'text-indigo-300 hover:text-indigo-200'}`}
       >
         {part}
       </a>
@@ -148,12 +149,12 @@ function OrganizerLogin({ onSuccess, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-gray-800 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-gray-100 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Стать организатором</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Закрыть">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
         </div>
-        <p className="mb-4 text-sm text-gray-500">Чтобы запустить звонок и управлять участниками, войдите.</p>
+        <p className="mb-4 text-sm text-gray-400">Чтобы запустить звонок и управлять участниками, войдите.</p>
 
         <form
           onSubmit={(e) => { e.preventDefault(); run(() => login(email.trim(), password)) }}
@@ -161,13 +162,13 @@ function OrganizerLogin({ onSuccess, onClose }) {
         >
           <input
             type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <input
             type="password" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <button type="submit" disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="submit" disabled={busy} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50">
             Войти
           </button>
         </form>
@@ -177,13 +178,13 @@ function OrganizerLogin({ onSuccess, onClose }) {
         <button
           onClick={() => run(() => loginWithGithub())}
           disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-2 font-medium hover:bg-gray-50 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-700 px-4 py-2 font-medium text-gray-100 transition hover:bg-neutral-800 disabled:opacity-50"
         >
           <GithubIcon className="h-5 w-5" />
           Войти через GitHub
         </button>
 
-        {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
       </div>
     </div>
   )
@@ -275,12 +276,18 @@ function Room() {
       // Чат закрыт → считаем непрочитанные. Обработчик из замыкания, поэтому смотрим ref.
       if (!chatOpenRef.current) setUnread((n) => n + 1)
     }
+    // История приходит от сервера на room:join (в т.ч. после реконнекта) — заменяем список
+    // целиком: это авторитетные последние N сообщений, заодно re-sync после обрыва сети.
+    function onHistory({ messages }) {
+      setMessages(messages)
+    }
     function onPresence({ participants }) {
       setParticipants(participants)
     }
     socket.on('connect', onConnect)
     socket.on('call:started', onStarted)
     socket.on('message:new', onNewMessage)
+    socket.on('chat:history', onHistory)
     socket.on('presence:update', onPresence)
     socket.connect()
 
@@ -288,19 +295,10 @@ function Room() {
       socket.off('connect', onConnect)
       socket.off('call:started', onStarted)
       socket.off('message:new', onNewMessage)
+      socket.off('chat:history', onHistory)
       socket.off('presence:update', onPresence)
       socket.disconnect()
     }
-  }, [entered, code])
-
-  // 3. История сообщений — грузим один раз, когда вошли в комнату.
-  useEffect(() => {
-    if (!entered) return
-    let cancelled = false
-    api.get(`/api/rooms/${code}/messages`)
-      .then((res) => { if (!cancelled) setMessages(res.data.messages) })
-      .catch(() => {})
-    return () => { cancelled = true }
   }, [entered, code])
 
   // Автоскролл вниз при каждом новом сообщении (bottomRef живёт только в открытом чате).
@@ -505,7 +503,7 @@ function Room() {
 
   if (phase === 'checking') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-400">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-gray-400">
         Подключение…
       </div>
     )
@@ -513,9 +511,9 @@ function Room() {
 
   if (phase === 'notfound') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gray-50 text-gray-800">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-neutral-950 text-gray-100">
         <p className="text-lg">Комната не найдена</p>
-        <button onClick={() => navigate('/')} className="bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">
+        <button onClick={() => navigate('/')} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500">
           На главную
         </button>
       </div>
@@ -524,30 +522,35 @@ function Room() {
 
   if (phase === 'waiting') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gray-900 text-white px-4 text-center">
-        <div>
+      <div className="relative min-h-screen flex flex-col items-center justify-center gap-6 overflow-hidden bg-neutral-950 text-gray-100 px-4 text-center">
+        {/* Индиго-свечение — единый тёмный вайб. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[140px]" />
+        </div>
+
+        <div className="relative">
           <h1 className="text-2xl sm:text-3xl font-semibold">Просьба присоединиться к встрече…</h1>
           <p className="mt-1 text-gray-400 truncate max-w-xs sm:max-w-md mx-auto">{roomName}</p>
         </div>
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-600 border-t-white" />
-        <p className="max-w-md text-gray-300">
+        <div className="relative h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-indigo-400" />
+        <p className="relative max-w-md text-gray-300">
           Звонок ещё не начался, потому что не пришёл организатор. Хотите стать организатором —
           войдите. Иначе просто подождите.
         </p>
         <button
           onClick={handleClaimClick}
           disabled={claiming}
-          className="rounded-lg bg-blue-600 px-6 py-3 font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="relative rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
         >
           {claiming ? 'Запускаем…' : 'Я организатор'}
         </button>
-        {claimError && <p className="text-red-400 text-sm">{claimError}</p>}
+        {claimError && <p className="relative text-red-400 text-sm">{claimError}</p>}
         <CopyLinkButton
           url={window.location.href}
           label="Пригласить — копировать ссылку"
-          className="text-sm text-gray-400 hover:text-white underline underline-offset-2"
+          className="relative text-sm text-gray-400 hover:text-white underline underline-offset-2"
         />
-        <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-300">
+        <button onClick={() => navigate('/')} className="relative text-sm text-gray-500 hover:text-gray-300">
           Выйти
         </button>
 
@@ -569,15 +572,15 @@ function Room() {
       {chatOpen && (
         <>
           <aside
-            className="absolute inset-0 z-30 flex flex-col bg-neutral-900 text-gray-100 sm:relative sm:z-auto sm:inset-auto sm:shrink-0 border-r border-neutral-800"
+            className="absolute inset-0 z-40 flex flex-col bg-neutral-900 text-gray-100 sm:relative sm:z-auto sm:inset-auto sm:shrink-0 border-r border-neutral-800"
             style={isDesktop ? { width: effectiveChatWidth } : undefined}
             onDragOver={onChatDragOver}
             onDragLeave={onChatDragLeave}
             onDrop={onChatDrop}
           >
             {dragActive && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-500 bg-neutral-900/85 pointer-events-none">
-                <span className="text-sm font-medium text-blue-300">Отпустите файл, чтобы прикрепить</span>
+              <div className="absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-indigo-500 bg-neutral-900/85 pointer-events-none">
+                <span className="text-sm font-medium text-indigo-300">Отпустите файл, чтобы прикрепить</span>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 shrink-0">
@@ -588,11 +591,11 @@ function Room() {
             <div className="dark-scroll flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
               {messages.map((m) => {
                 const mine = m.user.id === currentUserId
-                return (
+                // Содержимое пузыря — одинаково для своих/чужих; отличается обёртка (у чужих слева аватар).
+                const bubble = (
                   <div
-                    key={m.id}
-                    className={`max-w-[85%] rounded-lg px-3 py-2 ${
-                      mine ? 'self-end bg-blue-600 text-white' : 'self-start bg-neutral-800 border border-neutral-700'
+                    className={`rounded-lg px-3 py-2 ${
+                      mine ? 'bg-indigo-600 text-white' : 'bg-neutral-800 border border-neutral-700'
                     }`}
                   >
                     {!mine && <div className="text-xs font-medium text-gray-400 mb-0.5">{m.user.displayName}</div>}
@@ -602,9 +605,22 @@ function Room() {
                         <MessageAttachment code={code} message={m} />
                       </div>
                     )}
-                    <div className={`text-[10px] mt-0.5 text-right ${mine ? 'text-blue-200' : 'text-gray-500'}`}>
+                    <div className={`text-[10px] mt-0.5 text-right ${mine ? 'text-indigo-200' : 'text-gray-500'}`}>
                       {formatTime(m.createdAt)}
                     </div>
+                  </div>
+                )
+                if (mine) {
+                  return (
+                    <div key={m.id} className="max-w-[85%] self-end">
+                      {bubble}
+                    </div>
+                  )
+                }
+                return (
+                  <div key={m.id} className="flex max-w-[85%] items-end gap-2 self-start">
+                    <Avatar userId={m.user.id} name={m.user.displayName} size={28} />
+                    <div className="min-w-0">{bubble}</div>
                   </div>
                 )
               })}
@@ -656,12 +672,12 @@ function Room() {
                       handleSend()
                     }
                   }}
-                  className="flex-1 ml-1 bg-neutral-800 border border-neutral-700 text-gray-100 placeholder-gray-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 ml-1 bg-neutral-800 border border-neutral-700 text-gray-100 placeholder-gray-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
                   title="Отправить"
                   aria-label="Отправить"
                 >
@@ -677,7 +693,7 @@ function Room() {
           {/* Перетаскиваемая перегородка (только десктоп). */}
           <div
             onMouseDown={startChatResize}
-            className="hidden sm:block w-1.5 shrink-0 cursor-col-resize bg-neutral-800 hover:bg-blue-500 transition-colors"
+            className="hidden sm:block w-1.5 shrink-0 cursor-col-resize bg-neutral-800 hover:bg-indigo-500 transition-colors"
             title="Потяни, чтобы изменить ширину чата"
           />
         </>
@@ -700,7 +716,7 @@ function Room() {
 
       {/* Участники — выезжает справа. Та же тёмная нейтральная тема, что и чат. */}
       {participantsOpen && (
-        <aside className="absolute inset-0 z-30 flex flex-col bg-neutral-900 text-gray-100 sm:static sm:z-auto sm:w-80 sm:shrink-0 border-l border-neutral-800">
+        <aside className="absolute inset-0 z-40 flex flex-col bg-neutral-900 text-gray-100 sm:static sm:z-auto sm:w-80 sm:shrink-0 border-l border-neutral-800">
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 shrink-0">
             <span className="font-medium">Участники ({liveParticipants.length})</span>
             <button onClick={() => setParticipantsOpen(false)} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
@@ -709,7 +725,7 @@ function Room() {
             <CopyLinkButton
               url={window.location.href}
               label="Пригласить"
-              className="block w-full rounded-lg bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-blue-700"
+              className="block w-full rounded-lg bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-indigo-500"
             />
           </div>
           <ul className="dark-scroll flex-1 overflow-y-auto px-3 pb-4 flex flex-col gap-1">
@@ -719,9 +735,7 @@ function Room() {
               const canModerate = isOrganizer && !p.isLocal
               return (
                 <li key={p.identity} className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-neutral-800">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-sm font-semibold text-white">
-                    {(p.name || '?').charAt(0).toUpperCase()}
-                  </span>
+                  <Avatar userId={p.userId} name={p.name} size={32} />
                   <span className="flex-1 truncate text-sm">
                     {p.name}
                     {p.isLocal && ' (вы)'}

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import {
   createRoom,
   getRoom,
-  getMessages,
   getLivekitToken,
   claimOrganizer,
 } from '../controllers/roomController.js';
@@ -26,13 +26,51 @@ const upload = multer({
   limits: { fileSize: ATTACH_MAX_MB * 1024 * 1024 },
 });
 
+// Rate limit на загрузку файлов, чтобы скрипт не забил MinIO. Ключ — userId (лимитер стоит
+// ПОСЛЕ requireAuth, req.user уже есть): по IP резали бы живых людей за одним NAT (офис,
+// мобильный оператор). Массовое создание аккаунтов и так прикрыто лимитом на регистрацию.
+// Считаем ВСЕ запросы (не только успешные) — так тормозим сам цикл атаки.
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30, // 30 загрузок за 15 минут на юзера — человеку с запасом, скрипт душит
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user.id),
+  message: { error: 'Слишком много загрузок файлов. Подожди немного.' },
+});
+
+// Публичная проверка существования комнаты (getRoom) — вектор ПЕРЕБОРА: кастомные имена
+// угадываемы (standup, daily…), а по 200/404 можно вычислять активные комнаты. Авторизации нет →
+// ключуемся по IP (req.ip корректен: trust proxy=1 в app.js). 100/15мин человеку с запасом
+// (несколько проверок имени + входов), а словарный перебор тормозит.
+const roomLookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много запросов. Подожди немного.' },
+});
+
+// Действия входа в комнату (токен LiveKit, «Я организатор») — авторизованные, ключ по userId
+// (после requireAuth): по IP били бы живых людей за NAT. Штатно оба вызываются ~раз на вход,
+// 40/15мин с запасом; защищают от долбёжки токенами/захватом организатора.
+const roomJoinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user.id),
+  message: { error: 'Слишком много попыток. Подожди немного.' },
+});
+
 router.post('/', requireAuth, createRoom); // создать комнату
 // ПУБЛИЧНО (без requireAuth): проверка существования комнаты — не секрет (код и так нужен, чтобы
 // зайти). Нужно, чтобы экран создания/входа мог ДО prejoin сказать «занято»/«не найдена».
-router.get('/:code', getRoom); // проверить/получить комнату по коду
-router.get('/:code/messages', requireAuth, getMessages); // история сообщений
-router.post('/:code/claim-organizer', requireAuth, claimOrganizer); // «Я организатор» → стать модератором + старт звонка
-router.post('/:code/livekit-token', requireAuth, getLivekitToken); // токен для входа в видеозвонок
+router.get('/:code', roomLookupLimiter, getRoom); // проверить/получить комнату по коду
+// История сообщений раздаётся сокетом (chat:history на room:join), а не REST — чтобы её нельзя
+// было получить, не подключившись к комнате. Публичного /messages больше нет.
+router.post('/:code/claim-organizer', requireAuth, roomJoinLimiter, claimOrganizer); // «Я организатор» → модератор + старт
+router.post('/:code/livekit-token', requireAuth, roomJoinLimiter, getLivekitToken); // токен для входа в видеозвонок
 
 // Модерация — только организатор (проверка внутри контроллеров через requireOrganizer).
 router.post('/:code/moderate/mute', requireAuth, muteParticipant); // выключить мик/камеру/демку участнику
@@ -44,6 +82,7 @@ router.post('/:code/moderate/kick', requireAuth, kickParticipant); // выгна
 router.post(
   '/:code/attachments',
   requireAuth,
+  uploadLimiter, // ПОСЛЕ requireAuth — лимитер ключуется по req.user.id
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {
       if (err) {

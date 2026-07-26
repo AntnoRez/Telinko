@@ -222,7 +222,7 @@ function VideoPlayer({ src, name }) {
           step="0.1"
           value={current}
           onChange={onSeek}
-          className="mb-0.5 block w-full accent-blue-500"
+          className="mb-0.5 block w-full accent-indigo-500"
           aria-label="Перемотка"
         />
         <div className="flex items-center gap-0.5 text-white">

@@ -30,6 +30,11 @@ export const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false, // имя для отображения в чатах/звонках — есть у всех, включая гостей
   },
+  avatarKey: {
+    type: DataTypes.STRING,
+    allowNull: true, // ключ объекта аватара в MinIO (avatars/<id>-<uuid>). null = аватара нет,
+    // показываем кружок с буквой. НАРУЖУ не отдаём — раздаём через GET /api/users/:id/avatar.
+  },
   // --- Гостевой режим / модерация ---
   guest: {
     type: DataTypes.BOOLEAN,

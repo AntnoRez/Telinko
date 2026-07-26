@@ -93,70 +93,77 @@ function SecretView() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      <header className="flex items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-        <Link to="/" className="text-sm text-gray-500 hover:text-gray-800">
-          ← На главную
-        </Link>
-      </header>
+    <div className="relative min-h-screen overflow-hidden bg-neutral-950 text-gray-100">
+      {/* Индиго-свечение — единый тёмный вайб. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[140px]" />
+      </div>
 
-      <main className="mx-auto max-w-lg px-4 sm:px-6 py-8">
-        <h1 className="mb-6 text-2xl font-semibold">Секретное сообщение</h1>
+      <div className="relative">
+        <header className="mx-auto flex max-w-lg items-center px-4 sm:px-6 py-4">
+          <Link to="/" className="text-sm text-gray-400 hover:text-gray-100">
+            ← На главную
+          </Link>
+        </header>
 
-        <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-sm">
-          {status === 'loading' && <p className="text-gray-400">Загрузка…</p>}
+        <main className="mx-auto max-w-lg px-4 sm:px-6 pb-12">
+          <h1 className="mb-6 text-2xl font-semibold">Секретное сообщение</h1>
 
-          {status === 'badlink' && (
-            <p className="text-red-600">
-              Ссылка неполная — в ней нет ключа расшифровки (часть после #). Попроси прислать
-              ссылку целиком.
-            </p>
-          )}
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-6 backdrop-blur-sm">
+            {status === 'loading' && <p className="text-gray-400">Загрузка…</p>}
 
-          {status === 'notfound' && (
-            <p className="text-gray-600">
-              Секрет не найден. Возможно, он уже был открыт или истёк срок ссылки.
-            </p>
-          )}
-
-          {status === 'error' && <p className="text-red-600">Не удалось загрузить секрет.</p>}
-
-          {status === 'ready' && (
-            <form onSubmit={handleReveal} className="flex flex-col gap-4">
-              <p className="text-sm text-gray-500">
-                Нажми, чтобы расшифровать и показать секрет. Он одноразовый — после этого сгорит.
+            {status === 'badlink' && (
+              <p className="text-red-400">
+                Ссылка неполная — в ней нет ключа расшифровки (часть после #). Попроси прислать
+                ссылку целиком.
               </p>
+            )}
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
+            {status === 'notfound' && (
+              <p className="text-gray-300">
+                Секрет не найден. Возможно, он уже был открыт или истёк срок ссылки.
+              </p>
+            )}
 
-              <button
-                type="submit"
-                disabled={revealing}
-                className="self-start rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {revealing ? 'Расшифровка…' : 'Показать секрет'}
-              </button>
-            </form>
-          )}
+            {status === 'error' && <p className="text-red-400">Не удалось загрузить секрет.</p>}
 
-          {status === 'revealed' && (
-            <div className="flex flex-col gap-4">
-              <div className="whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-sm">
-                {secretText}
+            {status === 'ready' && (
+              <form onSubmit={handleReveal} className="flex flex-col gap-4">
+                <p className="text-sm text-gray-400">
+                  Нажми, чтобы расшифровать и показать секрет. Он одноразовый — после этого сгорит.
+                </p>
+
+                {error && <p className="text-sm text-red-400">{error}</p>}
+
+                <button
+                  type="submit"
+                  disabled={revealing}
+                  className="self-start rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {revealing ? 'Расшифровка…' : 'Показать секрет'}
+                </button>
+              </form>
+            )}
+
+            {status === 'revealed' && (
+              <div className="flex flex-col gap-4">
+                <div className="whitespace-pre-wrap break-words rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 font-mono text-sm text-gray-100">
+                  {secretText}
+                </div>
+                <button
+                  onClick={handleCopy}
+                  className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+                >
+                  {copied ? 'Скопировано!' : 'Копировать'}
+                </button>
+                <p className="text-xs text-gray-500">
+                  Сохрани содержимое сейчас — если ссылка была одноразовой, повторно она уже не откроется.
+                </p>
               </div>
-              <button
-                onClick={handleCopy}
-                className="self-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                {copied ? 'Скопировано!' : 'Копировать'}
-              </button>
-              <p className="text-xs text-gray-400">
-                Сохрани содержимое сейчас — если ссылка была одноразовой, повторно она уже не откроется.
-              </p>
-            </div>
-          )}
-        </div>
-      </main>
+            )}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

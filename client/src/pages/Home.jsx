@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuthStore } from '../store/authStore'
-import { extractRoomCode } from '../utils/room'
 import Prejoin from './Prejoin'
-import { VideoIcon, LockIcon } from '../components/icons'
+import Avatar from '../components/Avatar'
+import ProfileModal from '../components/ProfileModal'
+import { VideoIcon, LockIcon, TelinkoLogo } from '../components/icons'
 
 // Формат кастомного имени комнаты — совпадает с серверным CUSTOM_CODE_RE.
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/
@@ -15,31 +16,10 @@ function Home() {
   const navigate = useNavigate()
 
   const [roomName, setRoomName] = useState('') // опциональное имя новой комнаты
-  const [joinInput, setJoinInput] = useState('') // код ИЛИ полная ссылка
-  const [joinError, setJoinError] = useState(null)
   const [creating, setCreating] = useState(false) // показываем prejoin для создания
   const [createError, setCreateError] = useState(null)
   const [busy, setBusy] = useState(false) // идёт проверка имени/существования комнаты
-
-  // Присоединиться: принимаем и код, и ссылку. Существование проверяем ЗДЕСЬ (публичный GET),
-  // чтобы «не найдена» показать сразу, а не после prejoin.
-  async function handleJoin(e) {
-    e.preventDefault()
-    setJoinError(null)
-    const code = extractRoomCode(joinInput)
-    if (!code) {
-      setJoinError('Вставь код комнаты или ссылку')
-      return
-    }
-    setBusy(true)
-    try {
-      await api.get(`/api/rooms/${code}`) // 200 → есть, идём в комнату (prejoin внутри Room)
-      navigate(`/room/${code}`)
-    } catch (err) {
-      setJoinError(err?.response?.status === 404 ? 'Комната не найдена' : 'Не удалось проверить комнату')
-      setBusy(false)
-    }
-  }
+  const [showProfile, setShowProfile] = useState(false) // модалка профиля (смена имени/аватара)
 
   // Создать: проверяем ДО prejoin — формат имени и занятость, чтобы не гонять человека вводить
   // имя зря. Пусто → авто-код (проверять нечего). Всё ок → переходим в prejoin.
@@ -95,93 +75,110 @@ function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* Шапка: слева название, справа статус входа. */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4">
-        <span className="text-lg font-semibold">Инструменты</span>
-        {user ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">{user.displayName}</span>
-            <button onClick={logout} className="text-sm text-gray-500 hover:text-red-600">
-              Выйти
-            </button>
-          </div>
-        ) : (
-          <Link to="/login" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            Войти
-          </Link>
-        )}
-      </header>
+    <div className="relative min-h-screen overflow-hidden bg-neutral-950 text-gray-100">
+      {/* Фоновое индиго-свечение — «крутой» тёмный вайб, единый со звонком по нейтральному фону. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-48 left-1/2 h-[38rem] w-[38rem] -translate-x-1/2 rounded-full bg-indigo-600/20 blur-[140px]" />
+        <div className="absolute top-1/3 -right-40 h-[30rem] w-[30rem] rounded-full bg-violet-600/10 blur-[140px]" />
+      </div>
 
-      <main className="mx-auto max-w-2xl px-4 sm:px-6 py-8 flex flex-col gap-6">
-        {/* Видеозвонки: создать / присоединиться (публично, без обязательного входа). */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
-              <VideoIcon className="w-6 h-6" />
+      <div className="relative">
+        {/* Шапка: бренд слева, статус входа справа. */}
+        <header className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-5">
+          <span className="-ml-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight sm:-ml-2">
+            <TelinkoLogo className="h-10 w-10" />
+            <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+              Telinko
+            </span>
+          </span>
+          {user ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="flex items-center gap-2 rounded-lg px-2 py-1 text-gray-300 transition hover:bg-neutral-800 hover:text-gray-100"
+                title="Профиль — сменить имя или аватар"
+              >
+                <Avatar userId={user.id} name={user.displayName} size={28} hasAvatar={user.avatarVersion != null} version={user.avatarVersion} />
+                <span className="text-sm">{user.displayName}</span>
+              </button>
+              <button onClick={logout} className="rounded-lg px-3 py-1.5 text-sm text-gray-400 hover:bg-neutral-800 hover:text-gray-100">
+                Выйти
+              </button>
             </div>
-            <div>
-              <h1 className="text-lg font-semibold">Видеозвонки</h1>
-              <p className="text-sm text-gray-500">Групповые звонки с чатом и демонстрацией экрана</p>
-            </div>
-          </div>
+          ) : (
+            <Link to="/login" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500">
+              Войти
+            </Link>
+          )}
+        </header>
 
-          {/* Создать */}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              placeholder="Имя комнаты (необязательно)"
-              value={roomName}
-              onChange={(e) => { setRoomName(e.target.value); setCreateError(null) }}
-              maxLength={64}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <button
-              onClick={startCreate}
-              disabled={busy}
-              className="rounded-lg bg-blue-600 px-5 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              Создать
-            </button>
-          </div>
-          {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
-
-          <div className="my-4 flex items-center gap-3 text-xs text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" /> или <span className="h-px flex-1 bg-gray-200" />
-          </div>
-
-          {/* Присоединиться */}
-          <form onSubmit={handleJoin} className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              placeholder="Код комнаты или ссылка"
-              value={joinInput}
-              onChange={(e) => { setJoinInput(e.target.value); setJoinError(null) }}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-            <button type="submit" disabled={busy} className="rounded-lg bg-gray-200 px-5 py-2 font-medium text-gray-800 hover:bg-gray-300 disabled:opacity-50">
-              Присоединиться
-            </button>
-          </form>
-          {joinError && <p className="mt-2 text-sm text-red-600">{joinError}</p>}
-        </section>
-
-        {/* Секретные ссылки — как было. */}
-        <Link
-          to="/secret"
-          className="flex items-center gap-3 rounded-2xl bg-white p-5 shadow-sm transition hover:shadow-md"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-700">
-            <LockIcon className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="font-medium">Секретные ссылки</div>
-            <p className="mt-1 text-sm text-gray-500">
-              Одноразовые зашифрованные сообщения — сгорают после прочтения
+        <main className="mx-auto max-w-3xl px-4 sm:px-6 pt-10 pb-16 sm:pt-16">
+          {/* Hero */}
+          <div className="mb-10 text-center sm:mb-14">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+              <span className="bg-gradient-to-r from-indigo-300 via-violet-300 to-indigo-300 bg-clip-text text-transparent">
+                Видеоконференции
+              </span>
+            </h1>
+            <p className="mx-auto mt-4 max-w-xl text-base text-gray-400 sm:text-lg">
+              Защищенные видеозвонки в твоем браузере.
             </p>
           </div>
-        </Link>
-      </main>
+
+          <div className="flex flex-col gap-5">
+            {/* Видеозвонки: создать комнату (вход в комнату — только по ссылке). */}
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm">
+              <div className="mb-5 flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300 ring-1 ring-inset ring-indigo-500/20">
+                  <VideoIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Новый видеозвонок</h2>
+                  <p className="text-sm text-gray-400">Создай комнату и пригласи по ссылке</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  placeholder="Имя комнаты (необязательно)"
+                  value={roomName}
+                  onChange={(e) => { setRoomName(e.target.value); setCreateError(null) }}
+                  maxLength={64}
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800/80 px-3 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={startCreate}
+                  disabled={busy}
+                  className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  Создать
+                </button>
+              </div>
+              {createError && <p className="mt-2 text-sm text-red-400">{createError}</p>}
+            </section>
+
+            {/* Секретные ссылки. */}
+            <Link
+              to="/secret"
+              className="group flex items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm transition hover:border-neutral-700 hover:bg-neutral-900"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 ring-1 ring-inset ring-violet-500/20">
+                <LockIcon className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold">Секретная ссылка</div>
+                <p className="mt-1 text-sm text-gray-400">
+                  Одноразовое зашифрованное сообщение
+                </p>
+              </div>
+              <span className="ml-auto shrink-0 text-lg text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-gray-300">→</span>
+            </Link>
+          </div>
+        </main>
+      </div>
+
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </div>
   )
 }

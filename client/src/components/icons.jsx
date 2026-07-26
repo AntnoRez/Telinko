@@ -29,6 +29,34 @@ export function LockIcon(props) {
   )
 }
 
+// Логотип Telinko — «V» + play-треугольник в индиго→фиолетовом градиенте (наш акцент).
+// Своя палитра (не currentColor): бренд-цвет фиксирован. Размер задаётся через className;
+// viewBox 256×200 (шире квадрата) — в квадратном боксе фигура впишется по ширине с центровкой.
+export function TelinkoLogo(props) {
+  return (
+    <svg viewBox="0 0 256 200" fill="none" aria-hidden {...props}>
+      <defs>
+        <linearGradient id="tl-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#6366F1" />
+          <stop offset="100%" stopColor="#7C3AED" />
+        </linearGradient>
+      </defs>
+      {/* Буква V */}
+      <path
+        fill="url(#tl-grad)"
+        d="M36 24 Q36 12 48 12 H90 Q98 12 102 20 L128 72 L154 20 Q158 12 166 12 H208 Q220 12 220 24 Q220 28 218 32 L158 154 Q152 166 138 166 H118 Q104 166 98 154 L38 32 Q36 28 36 24 Z"
+      />
+      {/* Грань-шов */}
+      <path d="M118 166 L128 72 L138 166 Z" fill="#4338CA" opacity=".28" />
+      {/* Play-треугольник */}
+      <path
+        fill="url(#tl-grad)"
+        d="M248 74 Q248 66 240 66 L208 92 Q202 97 202 100 Q202 103 208 108 L240 134 Q248 134 248 126 Z"
+      />
+    </svg>
+  )
+}
+
 // Логотип GitHub (заливка currentColor) — кнопка «Войти через GitHub».
 export function GithubIcon(props) {
   return (

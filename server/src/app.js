@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
 import roomRoutes from './routes/rooms.js';
 import secretRoutes from './routes/secrets.js';
 
@@ -39,6 +40,9 @@ app.get('/api/health', (req, res) => {
 
 // Роуты авторизации: все пути внутри получат префикс /api/auth
 app.use('/api/auth', authRoutes);
+
+// Роуты профиля: префикс /api/users (сменить имя/аватар, раздача аватаров)
+app.use('/api/users', userRoutes);
 
 // Роуты комнат: префикс /api/rooms
 app.use('/api/rooms', roomRoutes);
