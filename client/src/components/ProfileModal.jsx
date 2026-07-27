@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import Avatar from './Avatar'
 
@@ -16,7 +16,6 @@ export default function ProfileModal({ onClose }) {
   const [saved, setSaved] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [error, setError] = useState(null)
-  const fileRef = useRef(null)
 
   if (!user) return null
 
@@ -67,11 +66,8 @@ export default function ProfileModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-gray-100 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-gray-100 shadow-xl">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Профиль</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
@@ -87,14 +83,13 @@ export default function ProfileModal({ onClose }) {
             version={user.avatarVersion}
           />
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={avatarBusy}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            {/* Нативный label ↔ input: на iOS надёжнее программного .click() по скрытому инпуту. */}
+            <label
+              className={`cursor-pointer rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 ${avatarBusy ? 'pointer-events-none opacity-50' : ''}`}
             >
               {avatarBusy ? 'Загрузка…' : hasAvatar ? 'Сменить фото' : 'Загрузить фото'}
-            </button>
+              <input type="file" accept="image/*" className="sr-only" onChange={onPickFile} />
+            </label>
             {hasAvatar && (
               <button
                 type="button"
@@ -106,7 +101,6 @@ export default function ProfileModal({ onClose }) {
               </button>
             )}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
         </div>
 
         {/* Имя */}

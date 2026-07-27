@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { roomDisplayName } from '../utils/room'
 import CopyLinkButton from '../components/CopyLinkButton'
 import Avatar from '../components/Avatar'
+import LoginModal from '../components/LoginModal'
 
 // Иконки микрофона/камеры (вкл/выкл). currentColor наследует цвет кнопки.
 function MicIcon({ off }) {
@@ -45,6 +46,7 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
   const [mediaError, setMediaError] = useState(null)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState(null)
+  const [showLogin, setShowLogin] = useState(false) // модалка входа в аккаунт (для гостя по ссылке)
 
   const videoRef = useRef(null)
 
@@ -204,6 +206,18 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
         </button>
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
+        {/* Гость по ссылке может войти в свой аккаунт вместо гостевого входа. После входа стор
+            обновит user → выше появится «Вход как …», а это поле имени/кнопка исчезнут. */}
+        {needsName && (
+          <button
+            type="button"
+            onClick={() => setShowLogin(true)}
+            className="mt-1 self-center text-sm text-indigo-300 hover:text-indigo-200 underline underline-offset-2"
+          >
+            Уже есть аккаунт? Войти
+          </button>
+        )}
+
         {/* Пригласить — только когда комната уже есть (при входе). При создании ссылки ещё нет. */}
         {inviteUrl && (
           <CopyLinkButton
@@ -224,6 +238,15 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
           </button>
         )}
       </div>
+
+      {showLogin && (
+        <LoginModal
+          title="Войти в аккаунт"
+          subtitle="Чтобы зайти под своим аккаунтом, а не гостем."
+          onClose={() => setShowLogin(false)}
+          onSuccess={() => setShowLogin(false)}
+        />
+      )}
     </div>
   )
 }

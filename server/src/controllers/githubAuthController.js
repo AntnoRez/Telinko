@@ -154,7 +154,6 @@ export async function githubCallback(req, res) {
 
     // 5. ставим нашу сессионную cookie (та же, что у остального логина) и рапортуем успех.
     res.cookie(COOKIE_NAME, signToken({ userId: user.id }), cookieOptions);
-    console.log('githubCallback OK: user', user.id, user.displayName);
     return done('ok');
   } catch (err) {
     console.error('githubCallback error:', err.message);

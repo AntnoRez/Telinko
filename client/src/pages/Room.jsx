@@ -12,7 +12,7 @@ import EmojiPicker from '../components/EmojiPicker'
 import ImageLightbox from '../components/ImageLightbox'
 import VideoPlayer from '../components/VideoPlayer'
 import Avatar from '../components/Avatar'
-import { GithubIcon } from '../components/icons'
+import LoginModal from '../components/LoginModal'
 import { roomDisplayName } from '../utils/room'
 
 // Время отправки в формате ЧЧ:ММ по локали браузера (напр. "14:05").
@@ -125,70 +125,6 @@ const KickIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 17l5-5-5-5M21 12H9M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2" /></svg>
 )
 
-// Модалка «Я организатор» для тех, кто ещё не реальный аккаунт (гость/аноним): либо войти
-// существующими логином/паролем, либо через GitHub. После успеха — claim.
-function OrganizerLogin({ onSuccess, onClose }) {
-  const login = useAuthStore((s) => s.login)
-  const loginWithGithub = useAuthStore((s) => s.loginWithGithub)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-
-  async function run(fn) {
-    setBusy(true)
-    setError(null)
-    try {
-      await fn()
-      onSuccess()
-    } catch {
-      setError('Не получилось. Проверь данные и попробуй снова.')
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-gray-100 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Стать организатором</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
-        </div>
-        <p className="mb-4 text-sm text-gray-400">Чтобы запустить звонок и управлять участниками, войдите.</p>
-
-        <form
-          onSubmit={(e) => { e.preventDefault(); run(() => login(email.trim(), password)) }}
-          className="flex flex-col gap-2"
-        >
-          <input
-            type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <input
-            type="password" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <button type="submit" disabled={busy} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50">
-            Войти
-          </button>
-        </form>
-
-        <div className="my-3 text-center text-xs text-gray-400">или</div>
-
-        <button
-          onClick={() => run(() => loginWithGithub())}
-          disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-700 px-4 py-2 font-medium text-gray-100 transition hover:bg-neutral-800 disabled:opacity-50"
-        >
-          <GithubIcon className="h-5 w-5" />
-          Войти через GitHub
-        </button>
-
-        {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
-      </div>
-    </div>
-  )
-}
 
 function Room() {
   const { code } = useParams() // код комнаты из URL /room/:code
@@ -217,6 +153,9 @@ function Room() {
   const [showOrgLogin, setShowOrgLogin] = useState(false) // модалка «стать организатором»
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState(null)
+  // Текст экрана «notfound»: по умолчанию «не найдена», но при неудачном авто-создании (кривой
+  // код 400 / лимит 429) показываем серверное сообщение — оно уже человекочитаемое.
+  const [notFoundMsg, setNotFoundMsg] = useState('Комната не найдена')
   // Чат (слева) и участники (справа) — независимые панели, могут быть открыты одновременно (как в Jitsi).
   const [chatOpen, setChatOpen] = useState(false)
   const [participantsOpen, setParticipantsOpen] = useState(false)
@@ -237,21 +176,54 @@ function Room() {
 
   const entered = phase === 'waiting' || phase === 'call' // комната существует, мы внутри
 
-  // 1. Узнаём статус комнаты после prejoin (или сразу, если пришли с create).
+  // 1. Узнаём статус комнаты после prejoin (или сразу, если пришли с create). Если комнаты нет
+  //    (прямая ссылка на несуществующий код) — заводим её под этим кодом: модель Jitsi/Telemost,
+  //    где любое имя = комната. 409 = кто-то создал в тот же миг → перечитываем и входим. Прочие
+  //    ошибки создания (400 кривой код / 429 лимит) → экран notfound с серверным текстом.
   useEffect(() => {
     if (phase !== 'checking') return
     let cancelled = false
-    api
-      .get(`/api/rooms/${code}`)
-      .then((res) => {
+
+    // Войти по данным комнаты: organizerId решает waiting (звонок не начат) / call (идёт).
+    const enter = (room) => {
+      if (cancelled) return
+      setOrganizerId(room.organizerId)
+      setStartedAt(room.startedAt)
+      setPhase(room.started ? 'call' : 'waiting')
+    }
+
+    async function checkOrCreate() {
+      try {
+        const res = await api.get(`/api/rooms/${code}`)
+        enter(res.data.room)
+      } catch (err) {
         if (cancelled) return
-        setOrganizerId(res.data.room.organizerId)
-        setStartedAt(res.data.room.startedAt)
-        setPhase(res.data.room.started ? 'call' : 'waiting')
-      })
-      .catch(() => {
-        if (!cancelled) setPhase('notfound')
-      })
+        if (err.response?.status !== 404) { setPhase('notfound'); return } // сеть/сервер — не создаём
+        // Комнаты нет — создаём под этим же кодом (авто-создание по прямой ссылке).
+        try {
+          const res = await api.post('/api/rooms', { code })
+          enter(res.data.room)
+        } catch (createErr) {
+          if (cancelled) return
+          if (createErr.response?.status === 409) {
+            // Гонка: кто-то создал в этот же миг — просто перечитаем и войдём.
+            try {
+              const res = await api.get(`/api/rooms/${code}`)
+              enter(res.data.room)
+            } catch {
+              if (!cancelled) setPhase('notfound')
+            }
+          } else {
+            // 400 (формат кода) / 429 (лимит) / прочее — покажем серверный текст, если он есть.
+            const msg = createErr.response?.data?.error
+            if (msg) setNotFoundMsg(msg)
+            setPhase('notfound')
+          }
+        }
+      }
+    }
+
+    checkOrCreate()
     return () => { cancelled = true }
   }, [phase, code])
 
@@ -512,7 +484,7 @@ function Room() {
   if (phase === 'notfound') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-neutral-950 text-gray-100">
-        <p className="text-lg">Комната не найдена</p>
+        <p className="text-lg">{notFoundMsg}</p>
         <button onClick={() => navigate('/')} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500">
           На главную
         </button>
@@ -555,7 +527,9 @@ function Room() {
         </button>
 
         {showOrgLogin && (
-          <OrganizerLogin
+          <LoginModal
+            title="Стать организатором"
+            subtitle="Чтобы запустить звонок и управлять участниками."
             onClose={() => setShowOrgLogin(false)}
             onSuccess={() => { setShowOrgLogin(false); doClaim() }}
           />
@@ -795,8 +769,8 @@ function Room() {
       )}
 
       {showSecret && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowSecret(false)}>
-          <div className="dark-scroll w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-4 sm:p-6 shadow-xl text-gray-100" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="dark-scroll w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-4 sm:p-6 shadow-xl text-gray-100">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Секретная ссылка</h2>
               <button onClick={() => setShowSecret(false)} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>

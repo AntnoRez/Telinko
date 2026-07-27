@@ -599,6 +599,16 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
     },
   ]
 
+  // На мобильных/тач прячем «Показать экран»: getDisplayMedia там либо не поддерживается
+  // (iOS Safari), либо не работает (Android-телефоны). Условие — нет getDisplayMedia ИЛИ основной
+  // указатель «грубый» (тач-экран). На десктопе (мышь + поддержка) кнопка остаётся.
+  const canScreenShare =
+    typeof navigator?.mediaDevices?.getDisplayMedia === 'function' &&
+    !window.matchMedia?.('(pointer: coarse)').matches
+  const barItems = canScreenShare
+    ? adaptiveItems
+    : adaptiveItems.filter((i) => i.key !== 'screenshare')
+
   // Постоянные второстепенные инструменты в «⋮» (порядок = сверху вниз).
   const menuItems = [
     {
@@ -664,7 +674,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
           в «⋮»); затем постоянная «⋮» (пригласить/секретка/…) и закреплённый справа выход. */}
       <AdaptiveToolbar
         pinnedStart={<MasterAudioControls />}
-        items={adaptiveItems}
+        items={barItems}
         menuItems={menuItems}
         leaveButton={leaveButton}
       />

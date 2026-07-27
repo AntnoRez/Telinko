@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import Prejoin from './Prejoin'
 import Avatar from '../components/Avatar'
 import ProfileModal from '../components/ProfileModal'
+import LoginModal from '../components/LoginModal'
 import { VideoIcon, LockIcon, TelinkoLogo } from '../components/icons'
 
 // Формат кастомного имени комнаты — совпадает с серверным CUSTOM_CODE_RE.
@@ -20,6 +21,7 @@ function Home() {
   const [createError, setCreateError] = useState(null)
   const [busy, setBusy] = useState(false) // идёт проверка имени/существования комнаты
   const [showProfile, setShowProfile] = useState(false) // модалка профиля (смена имени/аватара)
+  const [showLogin, setShowLogin] = useState(false) // модалка входа/регистрации
 
   // Создать: проверяем ДО prejoin — формат имени и занятость, чтобы не гонять человека вводить
   // имя зря. Пусто → авто-код (проверять нечего). Всё ок → переходим в prejoin.
@@ -106,9 +108,12 @@ function Home() {
               </button>
             </div>
           ) : (
-            <Link to="/login" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500">
+            <button
+              onClick={() => setShowLogin(true)}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+            >
               Войти
-            </Link>
+            </button>
           )}
         </header>
 
@@ -179,6 +184,9 @@ function Home() {
       </div>
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showLogin && (
+        <LoginModal onClose={() => setShowLogin(false)} onSuccess={() => setShowLogin(false)} />
+      )}
     </div>
   )
 }

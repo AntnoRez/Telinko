@@ -68,7 +68,7 @@ export const useAuthStore = create((set, get) => ({
         settled = true
         if (channel) { channel.onmessage = null; channel.close() }
         window.removeEventListener('message', onWindowMessage)
-        clearInterval(closedTimer)
+        clearTimeout(fallbackTimer)
       }
       async function finish(ok, err) {
         if (settled) return
@@ -90,13 +90,16 @@ export const useAuthStore = create((set, get) => ({
         if (e.data?.source === 'github-oauth') finish(!!e.data.ok)
       }
       window.addEventListener('message', onWindowMessage)
-      // Окно закрыли, не завершив вход — не висим в промисе вечно. Небольшая фора, чтобы не
-      // опередить только что пришедшее сообщение об успехе (popup закрывается через ~300мс после него).
-      const closedTimer = setInterval(() => {
-        if (popup.closed && !settled) {
-          setTimeout(() => finish(false, new Error('Окно GitHub закрыто')), 400)
-        }
-      }, 500)
+      // ВАЖНО: НЕ опрашиваем popup.closed. Из-за COOP (наш бэкенд через helmet + сам GitHub ставят
+      // Cross-Origin-Opener-Policy) браузер отсоединяет хендл окна, и popup.closed становится true
+      // даже у ОТКРЫТОГО окна → ложное «окно закрыто», которое рвало вход прямо пока юзер логинится
+      // в GitHub (особенно в ПЕРВЫЙ раз — там дольше: логин/2FA). Исход ловим сообщением из popup
+      // (BroadcastChannel / postMessage со страницы /oauth/github). Fallback-таймаут — лишь чтобы
+      // промис не висел вечно, если юзер бросил окно и не вернулся.
+      const fallbackTimer = setTimeout(
+        () => finish(false, new Error('GitHub-вход не завершён. Попробуй ещё раз.')),
+        3 * 60 * 1000
+      )
     })
   },
 

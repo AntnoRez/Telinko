@@ -65,8 +65,8 @@ function ChatAttachMenu({ onSecretLink, onPickFile }) {
   return (
     <div ref={ref} className="relative shrink-0">
       {/* Скрытые input'ы выбора файла (клик по пунктам меню открывает их). */}
-      <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={pick} />
-      <input ref={fileInputRef} type="file" className="hidden" onChange={pick} />
+      <input id="chat-att-media" ref={mediaInputRef} type="file" accept="image/*,video/*" className="sr-only" onChange={pick} />
+      <input id="chat-att-file" ref={fileInputRef} type="file" className="sr-only" onChange={pick} />
       <button
         type="button"
         onClick={() => (open ? close() : setOpen(true))}
@@ -81,14 +81,16 @@ function ChatAttachMenu({ onSecretLink, onPickFile }) {
         <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-lg border border-neutral-800 bg-neutral-900 p-2 shadow-xl">
           {view === 'menu' ? (
             <div className="flex flex-col gap-0.5">
-              <button type="button" onClick={() => mediaInputRef.current?.click()} className={rowActive}>
+              {/* label ↔ input (htmlFor): нативно открывает пикер и надёжно отдаёт файл на iOS,
+                  в отличие от программного .click() по скрытому инпуту. */}
+              <label htmlFor="chat-att-media" className={`${rowActive} cursor-pointer`}>
                 <ImageIcon />
                 <span className="flex-1">Фото/видео</span>
-              </button>
-              <button type="button" onClick={() => fileInputRef.current?.click()} className={rowActive}>
+              </label>
+              <label htmlFor="chat-att-file" className={`${rowActive} cursor-pointer`}>
                 <FileIcon />
                 <span className="flex-1">Файл</span>
-              </button>
+              </label>
               <button type="button" onClick={() => setView('secret')} className={rowActive}>
                 <LockIcon className="h-[18px] w-[18px]" />
                 <span className="flex-1">Секретная ссылка</span>
