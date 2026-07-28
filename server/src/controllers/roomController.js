@@ -10,6 +10,18 @@ import { getIO } from '../socket/index.js';
 // отображаемое имя разбивкой по CamelCase (FggaGgHh → «Fgga Gg Hh»).
 const CUSTOM_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
 
+// Зарезервированные имена комнат. Комната живёт по чистому URL telinko.online/<code>, поэтому её
+// имя не должно совпадать с реальным путём (страница/ассет/прокси) — иначе ссылка на комнату
+// перекрылась бы страницей. Проверяем при СОЗДАНИИ (единственное место, где код становится
+// постоянным). Сравнение регистронезависимое. Сюда же складываем имена под будущие страницы.
+// ВАЖНО: заводишь новый топ-левел путь (/pricing и т.п.) — допиши его сюда.
+const RESERVED_CODES = new Set([
+  // существующие пути/ассеты/прокси
+  'api', 'assets', 'oauth', 'secret', 'room', 'favicon.svg', 'favicon.ico', 'robots.txt',
+  // зарезервировано под будущие страницы
+  'login', 'register', 'home', 'about', 'help', 'settings', 'admin', 'terms', 'privacy',
+]);
+
 // Приводим комнату к виду для клиента (без служебного updatedAt).
 function publicRoom(room) {
   return {
@@ -49,6 +61,9 @@ export async function createRoom(req, res) {
         return res.status(400).json({
           error: 'Имя комнаты: латиница/цифры/дефис/подчёркивание, 2–64 символа, без пробелов',
         });
+      }
+      if (RESERVED_CODES.has(code.toLowerCase())) {
+        return res.status(400).json({ error: 'Это имя зарезервировано, выбери другое' });
       }
       const existing = await Room.findOne({ where: { code } });
       if (existing) {

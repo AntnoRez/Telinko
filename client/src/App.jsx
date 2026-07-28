@@ -29,11 +29,6 @@ function App() {
           отдельных страниц /login и /register больше нет. */}
       <Route path="/" element={<Home />} />
 
-      {/* Комната — ПУБЛИЧНАЯ: по ссылке заходит и гость без аккаунта. Личность (гость или
-          реальный аккаунт) выясняет prejoin-экран: нет сессии → заводит гостя;
-          есть cookie → входит собой. */}
-      <Route path="/room/:code" element={<Room />} />
-
       {/* Финал GitHub-OAuth: сюда сервер редиректит popup, страница закрывает окно. */}
       <Route path="/oauth/github" element={<GithubOauthDone />} />
 
@@ -41,7 +36,17 @@ function App() {
       <Route path="/secret" element={<SecretCreate />} />
       <Route path="/secret/:id" element={<SecretView />} />
 
-      {/* Любой неизвестный адрес → на главную */}
+      {/* Комната — ПУБЛИЧНАЯ: по ссылке заходит и гость без аккаунта. Личность (гость или
+          реальный аккаунт) выясняет prejoin-экран: нет сессии → заводит гостя; есть cookie →
+          входит собой.
+          Чистый URL — telinko.online/<code> (path="/:code"). Статические роуты выше (/secret,
+          /oauth…) ранжируются React Router'ом ВЫШЕ, поэтому /:code их не перехватывает; а имена
+          комнат, совпадающие с этими путями, запрещены блэклистом на бэке (createRoom).
+          /room/:code оставлен АЛИАСОМ — чтобы уже разосланные старые ссылки не умерли. */}
+      <Route path="/:code" element={<Room />} />
+      <Route path="/room/:code" element={<Room />} />
+
+      {/* Неизвестный МНОГОсегментный адрес (одиночный сегмент уже съел /:code) → на главную */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>

@@ -13,7 +13,7 @@ import ImageLightbox from '../components/ImageLightbox'
 import VideoPlayer from '../components/VideoPlayer'
 import Avatar from '../components/Avatar'
 import LoginModal from '../components/LoginModal'
-import { roomDisplayName } from '../utils/room'
+import { roomDisplayName, isReserved } from '../utils/room'
 
 // Время отправки в формате ЧЧ:ММ по локали браузера (напр. "14:05").
 function formatTime(createdAt) {
@@ -133,11 +133,16 @@ function Room() {
   const user = useAuthStore((s) => s.user)
   const currentUserId = user?.id
 
+  // Зарезервированное имя (admin, terms… — те, что не перехвачены статическим роутом) не может
+  // быть комнатой: сразу «notfound» с пояснением, минуя prejoin. Сервер тоже отвергнет (400),
+  // но так мы не гоняем человека через prejoin впустую.
+  const reserved = isReserved(code)
+
   // Фаза: prejoin (экран имени) → checking (узнаём статус комнаты) → notfound |
   // waiting (ждём организатора) | call (звонок идёт). Пришли с create-флоу (state.joined) →
-  // prejoin пропускаем (имя уже спросили при создании).
+  // prejoin пропускаем (имя уже спросили при создании). Reserved-код → сразу notfound.
   const preJoined = location.state?.joined === true
-  const [phase, setPhase] = useState(preJoined ? 'checking' : 'prejoin')
+  const [phase, setPhase] = useState(reserved ? 'notfound' : preJoined ? 'checking' : 'prejoin')
   const [mediaPrefs, setMediaPrefs] = useState(location.state?.mediaPrefs ?? { camOn: false, micOn: true })
   const [organizerId, setOrganizerId] = useState(null)
   const [startedAt, setStartedAt] = useState(null) // момент старта звонка (для таймера длительности)
@@ -153,9 +158,9 @@ function Room() {
   const [showOrgLogin, setShowOrgLogin] = useState(false) // модалка «стать организатором»
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState(null)
-  // Текст экрана «notfound»: по умолчанию «не найдена», но при неудачном авто-создании (кривой
-  // код 400 / лимит 429) показываем серверное сообщение — оно уже человекочитаемое.
-  const [notFoundMsg, setNotFoundMsg] = useState('Комната не найдена')
+  // Текст экрана «notfound»: по умолчанию «не найдена»; для reserved-кода — «зарезервировано»,
+  // а при неудачном авто-создании (кривой код 400 / лимит 429) — серверное сообщение.
+  const [notFoundMsg, setNotFoundMsg] = useState(reserved ? 'Это имя зарезервировано' : 'Комната не найдена')
   // Чат (слева) и участники (справа) — независимые панели, могут быть открыты одновременно (как в Jitsi).
   const [chatOpen, setChatOpen] = useState(false)
   const [participantsOpen, setParticipantsOpen] = useState(false)

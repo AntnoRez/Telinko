@@ -1,5 +1,19 @@
 // Утилиты для работы с кодом/именем комнаты (чистые функции, без сети).
 
+// Зарезервированные имена комнат — зеркало RESERVED_CODES из
+// server/src/controllers/roomController.js (сервер — источник истины). Держим на клиенте, чтобы
+// отсеивать такие имена ДО prejoin: и на главной при «Создать», и по прямой ссылке в Room.
+// Меняешь список на бэке — поправь и здесь.
+export const RESERVED_ROOM_CODES = new Set([
+  'api', 'assets', 'oauth', 'secret', 'room', 'favicon.svg', 'favicon.ico', 'robots.txt',
+  'login', 'register', 'home', 'about', 'help', 'settings', 'admin', 'terms', 'privacy',
+])
+
+// Зарезервировано ли имя комнаты (регистронезависимо). Пустое/не строка → false.
+export function isReserved(code) {
+  return typeof code === 'string' && RESERVED_ROOM_CODES.has(code.toLowerCase())
+}
+
 // Вытаскивает КОД комнаты из того, что вставил юзер. Это может быть:
 //   • чистый код         — "abc-d2f"  или  "FggaGgHh"
 //   • полная ссылка      — "https://telinko.online/room/abc-d2f#key"

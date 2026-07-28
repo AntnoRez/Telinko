@@ -7,6 +7,7 @@ import Avatar from '../components/Avatar'
 import ProfileModal from '../components/ProfileModal'
 import LoginModal from '../components/LoginModal'
 import { VideoIcon, LockIcon, TelinkoLogo } from '../components/icons'
+import { isReserved } from '../utils/room'
 
 // Формат кастомного имени комнаты — совпадает с серверным CUSTOM_CODE_RE.
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/
@@ -33,6 +34,10 @@ function Home() {
         setCreateError('Имя: латиница/цифры/дефис/подчёркивание, 2–64 символа, без пробелов')
         return
       }
+      if (isReserved(name)) {
+        setCreateError('Это имя зарезервировано, выбери другое')
+        return
+      }
       setBusy(true)
       try {
         await api.get(`/api/rooms/${name}`) // 200 → комната уже есть → занято
@@ -54,11 +59,19 @@ function Home() {
   // Создать: сперва prejoin (имя + камера, там же заведётся гостевая сессия при необходимости),
   // затем создаём комнату (с опц. именем) и уходим в неё уже «вошедшими» (state.joined).
   async function handleCreateDone(prefs) {
+    const name = roomName.trim()
     try {
-      const name = roomName.trim()
       const res = await api.post('/api/rooms', name ? { code: name } : {})
-      navigate(`/room/${res.data.room.code}`, { state: { joined: true, mediaPrefs: prefs } })
+      // Чистый URL комнаты: telinko.online/<code> (без /room/). Старый путь ещё работает алиасом.
+      navigate(`/${res.data.room.code}`, { state: { joined: true, mediaPrefs: prefs } })
     } catch (err) {
+      // 409 = имя заняли, пока мы были в prejoin (гонка: напр. создаём ту же комнату из двух вкладок).
+      // Занятость проверяется ДО prejoin (startCreate); сюда попадаем лишь на гонке. Раз комната
+      // теперь существует и мы хотели именно её — заходим в неё, а не выбрасываем «занято».
+      if (err?.response?.status === 409 && name) {
+        navigate(`/${name}`, { state: { joined: true, mediaPrefs: prefs } })
+        return
+      }
       setCreateError(err?.response?.data?.error || 'Не удалось создать комнату')
       setCreating(false) // назад к форме с ошибкой
     }
