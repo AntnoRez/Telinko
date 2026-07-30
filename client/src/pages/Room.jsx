@@ -179,6 +179,14 @@ function Room() {
   // Стабильный колбэк для VideoCall — он репортит сюда живое состояние участников.
   const onLiveParticipants = useCallback((list) => setLiveParticipants(list), [])
 
+  // Фуллскрин ВСЕЙ сцены звонка (контейнер с чатом+видео+участниками) — иначе выехавшие панели
+  // остаются вне фуллскрин-элемента и не видны. Кнопка живёт в тулбаре VideoCall, но разворачиваем
+  // контейнер Room (callRef). isFs — настоящий Fullscreen API (десктоп/Android), pseudoFs — CSS-
+  // фолбэк для iOS (там нет Fullscreen API для div).
+  const callRef = useRef(null)
+  const [isFs, setIsFs] = useState(false)
+  const [pseudoFs, setPseudoFs] = useState(false)
+
   const entered = phase === 'waiting' || phase === 'call' // комната существует, мы внутри
 
   // 1. Узнаём статус комнаты после prejoin (или сразу, если пришли с create). Если комнаты нет
@@ -299,6 +307,13 @@ function Room() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // Следим за настоящим fullscreen (в т.ч. выход по Esc) — чтобы иконка тулбара была верной.
+  useEffect(() => {
+    const onFsChange = () => setIsFs(document.fullscreenElement === callRef.current)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
   // Тянем перегородку между чатом (слева) и видео. Чат прижат к левому краю окна, поэтому
   // его ширина = X курсора. Минимум — 1/5 окна; максимум оставляет место под звонок (VIDEO_MIN_WIDTH)
   // и под панель участников, если она открыта — чтобы видео не схлопывалось.
@@ -324,6 +339,21 @@ function Room() {
     setMediaPrefs(prefs)
     setPhase('checking')
   }
+
+  // Переключить фуллскрин всей сцены звонка. Клик из тулбара VideoCall — синхронно, в пределах
+  // пользовательского жеста (иначе requestFullscreen отклонят).
+  function toggleFullscreen() {
+    const el = callRef.current
+    if (!el) return
+    if (document.fullscreenEnabled && el.requestFullscreen) {
+      if (document.fullscreenElement) document.exitFullscreen()
+      else el.requestFullscreen()
+    } else {
+      setPseudoFs((v) => !v) // iOS: нет Fullscreen API для div → CSS-фолбэк «в пределах страницы»
+    }
+  }
+
+  const fullscreen = isFs || pseudoFs
 
   // «Я организатор»: реальный аккаунт → claim сразу; гость/аноним → сперва модалка входа.
   function handleClaimClick() {
@@ -546,7 +576,8 @@ function Room() {
   // phase === 'call' — звонок идёт. Раскладка как в Jitsi: видео на весь экран, ВСЕ контролы в
   // нижнем тулбаре (внутри VideoCall), шапки нет. Чат и участники — выезжающие сбоку панели.
   return (
-    <div className="relative flex h-screen bg-black">
+    // pseudoFs (iOS) → fixed inset-0 z-[60] накрывает весь вьюпорт (вместе с чатом/участниками).
+    <div ref={callRef} className={pseudoFs ? 'fixed inset-0 z-[60] flex bg-black' : 'relative flex h-screen bg-black'}>
       {/* Чат — выезжает СЛЕВА (на мобилке оверлей поверх видео). Тёмная нейтральная тема, как плитки. */}
       {chatOpen && (
         <>
@@ -690,6 +721,8 @@ function Room() {
           onOpenSecret={() => setShowSecret(true)}
           inviteUrl={window.location.href}
           onLiveParticipants={onLiveParticipants}
+          onToggleFullscreen={toggleFullscreen}
+          isFullscreen={fullscreen}
         />
       </div>
 

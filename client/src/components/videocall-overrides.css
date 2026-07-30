@@ -60,3 +60,18 @@
 .videocall-toolbar > * {
   flex: 0 0 auto;
 }
+
+/* --- Закрепление «главной» плитки (pin/spotlight) --- */
+
+/* Большая плитка заполняет свою область: вне сетки LiveKit .lk-participant-tile сам не тянется. */
+.videocall-focus,
+.videocall-focus > .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+}
+
+/* Лента мелких плиток под главной — занимает всю высоту своей полосы (высоту задаёт контейнер),
+   горизонтальный скролл и раскладку берёт на себя CarouselLayout. */
+.lk-carousel {
+  height: 100%;
+}

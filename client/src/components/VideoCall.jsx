@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   LiveKitRoom,
   GridLayout,
+  CarouselLayout,
+  LayoutContextProvider,
   ParticipantTile,
   DisconnectButton,
   MediaDeviceMenu,
@@ -12,6 +14,9 @@ import {
   useTracks,
   useTrackToggle,
   useEnsureTrackRef,
+  useCreateLayoutContext,
+  usePinnedTracks,
+  useFocusToggle,
   isTrackReference,
   useDataChannel,
   useLocalParticipant,
@@ -108,12 +113,29 @@ function FullscreenIcon({ active }) {
   )
 }
 
+// Один и тот же трек? (участник + источник + sid публикации). Нужно, чтобы отфильтровать
+// закреплённую «главную» плитку из ленты снизу. Плейсхолдеры (камера выкл) не имеют publication —
+// сравниваются по участнику+источнику. Аналог isEqualTrackRef, которого нет в экспорте пакета.
+function sameTrack(a, b) {
+  if (!a || !b) return false
+  return (
+    a.participant?.identity === b.participant?.identity &&
+    a.source === b.source &&
+    (a.publication?.trackSid ?? null) === (b.publication?.trackSid ?? null)
+  )
+}
+
 // Плитка участника. <ParticipantTile> остаётся прямым ребёнком сетки (иначе слетают
 // размеры/стили), а её содержимое отдаём детьми — воспроизводим дефолт LiveKit
 // (видео/аватар/имя) и добавляем наш регулятор громкости. group/tile — чтобы регулятор
 // всплывал при наведении на плитку.
-function MixerTile() {
-  const trackRef = useEnsureTrackRef()
+// trackRef (опц.): в сетке/ленте LiveKit прокидывает трек через контекст (проп не нужен), а для
+// одиночной «главной» плитки передаём его явным пропом.
+function MixerTile({ trackRef: trackRefProp }) {
+  const trackRef = useEnsureTrackRef(trackRefProp)
+  // Двойной клик по плитке = закрепить/открепить её «главной» (локально, через layout-context).
+  // useFocusToggle даёт готовый onClick-переключатель + флаг inFocus; вешаем его на onDoubleClick.
+  const { mergedProps, inFocus } = useFocusToggle({ trackRef, props: {} })
 
   // Реальное видео есть? (у выключенной камеры трек-плейсхолдер без publication → покажем аватар)
   const isVideo =
@@ -123,8 +145,22 @@ function MixerTile() {
       trackRef.source === Track.Source.ScreenShare)
 
   return (
-    <ParticipantTile trackRef={trackRef} className="group/tile">
+    <ParticipantTile
+      trackRef={trackRef}
+      className="group/tile"
+      onDoubleClick={(e) => { e.preventDefault(); mergedProps.onClick?.(e) }}
+    >
       {isVideo && <VideoTrack trackRef={trackRef} />}
+
+      {/* Бейдж «закреплено» на главной — подсказка, что двойной клик открепит. */}
+      {inFocus && (
+        <div
+          className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white"
+          title="Двойной клик — открепить"
+        >
+          📌
+        </div>
+      )}
 
       {/* Аватар, когда видео нет (CSS LiveKit сам прячет .lk-participant-placeholder при видео).
           Вместо серого силуэта LiveKit — наш кружок: аватар участника или буква. userId достаём
@@ -471,6 +507,34 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
     { source: Track.Source.ScreenShare, withPlaceholder: false },
   ])
 
+  // Локальное закрепление «главной» плитки (pin) — через штатный layout-context LiveKit.
+  // focusTrack — закреплённый трек (или undefined). carouselTracks — остальные, в ленту снизу.
+  const layoutContext = useCreateLayoutContext()
+  const pinnedTrack = usePinnedTracks(layoutContext)[0]
+  // Если закреплённый участник/трек исчез (вышел, выключил демку) — трека больше нет в списке →
+  // откатываемся в сетку, чтобы большая плитка не висела на «мёртвом» треке.
+  const focusTrack = pinnedTrack && tracks.some((t) => sameTrack(t, pinnedTrack)) ? pinnedTrack : undefined
+  const carouselTracks = tracks.filter((t) => !sameTrack(t, focusTrack))
+
+  // Демонстрация экрана авто-становится главной: пиним при появлении screenshare, снимаем при
+  // завершении. autoScreenShareRef хранит sid авто-запиненной демки, чтобы не переставлять пин,
+  // если пользователь после этого вручную выбрал другую плитку.
+  const autoScreenShareRef = useRef(null)
+  useEffect(() => {
+    const ss = tracks.find((t) => t.source === Track.Source.ScreenShare && isTrackReference(t))
+    if (ss && !autoScreenShareRef.current) {
+      layoutContext.pin.dispatch?.({ msg: 'set_pin', trackReference: ss })
+      autoScreenShareRef.current = ss.publication?.trackSid ?? 'ss'
+    } else if (!ss && autoScreenShareRef.current) {
+      // Демка завершилась — снимаем пин ТОЛЬКО если закреплена была именно она. Если юзер после
+      // авто-фокуса вручную закрепил другого (pinnedTrack — камера), его пин не трогаем.
+      if (pinnedTrack?.source === Track.Source.ScreenShare) {
+        layoutContext.pin.dispatch?.({ msg: 'clear_pin' })
+      }
+      autoScreenShareRef.current = null
+    }
+  }, [tracks, layoutContext, pinnedTrack])
+
   // Тогглы mic/cam/демки держим здесь (а не внутри кнопок) — одно действие используется и в
   // баре, и в кликабельной строке «···»-меню.
   const mic = useTrackToggle({ source: Track.Source.Microphone })
@@ -659,9 +723,28 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
       )}
 
       <div className="min-h-0 flex-1">
-        <GridLayout tracks={tracks}>
-          <MixerTile />
-        </GridLayout>
+        <LayoutContextProvider value={layoutContext}>
+          {focusTrack ? (
+            // Есть закреплённая → большая плитка сверху + горизонтальная лента остальных снизу.
+            <div className="flex h-full flex-col gap-2">
+              <div className="videocall-focus min-h-0 flex-1">
+                <MixerTile trackRef={focusTrack} />
+              </div>
+              {carouselTracks.length > 0 && (
+                <div className="h-24 shrink-0 sm:h-28">
+                  <CarouselLayout tracks={carouselTracks} orientation="horizontal">
+                    <MixerTile />
+                  </CarouselLayout>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Нет закреплённой → обычная адаптивная сетка (как было).
+            <GridLayout tracks={tracks}>
+              <MixerTile />
+            </GridLayout>
+          )}
+        </LayoutContextProvider>
       </div>
 
       {/* Наш скрытый аудио-рендер — единственный источник звука. */}
@@ -689,14 +772,13 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
 //   onLeave — выход из звонка (кнопка «положить трубку») → родитель уводит со страницы
 //   unread, onToggleChat, onToggleParticipants, onOpenSecret, inviteUrl — для кнопок тулбара
 //   onLiveParticipants(list) — колбэк с живым составом (identity/userId/name/isLocal/micOn/camOn)
-function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat, onToggleParticipants, onOpenSecret, inviteUrl, onLiveParticipants }) {
+// Фуллскрин теперь владеет Room (разворачивается ВСЯ сцена звонка — с чатом и участниками,
+// иначе выехавшие панели оставались бы вне фуллскрин-элемента). Сюда фуллскрин приходит готовым:
+// onToggleFullscreen — переключатель, isFullscreen — текущее состояние (для иконки/лейбла тулбара).
+function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat, onToggleParticipants, onOpenSecret, inviteUrl, onLiveParticipants, onToggleFullscreen, isFullscreen }) {
   const [token, setToken] = useState(null)
   const [url, setUrl] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ready | error
-
-  const containerRef = useRef(null)
-  const [isFs, setIsFs] = useState(false) // настоящий fullscreen (десктоп/Android)
-  const [pseudoFs, setPseudoFs] = useState(false) // фолбэк «в пределах страницы» (iOS)
 
   // Берём пропуск: POST /api/rooms/:code/livekit-token → { token, url }.
   useEffect(() => {
@@ -719,30 +801,6 @@ function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat,
     }
   }, [code])
 
-  // Следим за настоящим fullscreen (в т.ч. выход по Esc) — чтобы иконка была верной.
-  useEffect(() => {
-    function onFsChange() {
-      setIsFs(document.fullscreenElement === containerRef.current)
-    }
-    document.addEventListener('fullscreenchange', onFsChange)
-    return () => document.removeEventListener('fullscreenchange', onFsChange)
-  }, [])
-
-  function toggleFullscreen() {
-    const el = containerRef.current
-    if (!el) return
-    // Настоящий Fullscreen API (десктоп/Android): разворачиваем контейнер звонка.
-    if (document.fullscreenEnabled && el.requestFullscreen) {
-      if (document.fullscreenElement) document.exitFullscreen()
-      else el.requestFullscreen()
-    } else {
-      // iOS и прочие без Fullscreen API для div → CSS-фолбэк «в пределах страницы».
-      setPseudoFs((v) => !v)
-    }
-  }
-
-  const fullscreen = isFs || pseudoFs
-
   if (status === 'loading') {
     return <div className="p-4 text-gray-400">Подключение к звонку…</div>
   }
@@ -751,13 +809,7 @@ function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat,
   }
 
   return (
-    // pseudoFs → fixed inset-0 накрывает весь вьюпорт поверх чата (фолбэк для iOS).
-    <div
-      ref={containerRef}
-      data-lk-theme="default"
-      className={pseudoFs ? 'fixed inset-0 z-[60] bg-black' : ''}
-      style={{ height: '100%' }}
-    >
+    <div data-lk-theme="default" style={{ height: '100%' }}>
       <LiveKitRoom
         serverUrl={url}
         token={token}
@@ -771,8 +823,8 @@ function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat,
       >
         <AudioMixerProvider>
           <CallStage
-            onToggleFullscreen={toggleFullscreen}
-            isFullscreen={fullscreen}
+            onToggleFullscreen={onToggleFullscreen}
+            isFullscreen={isFullscreen}
             startedAt={startedAt}
             unread={unread}
             onToggleChat={onToggleChat}
