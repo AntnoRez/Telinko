@@ -75,3 +75,17 @@
 .lk-carousel {
   height: 100%;
 }
+
+/* Аватар-плейсхолдер (камера выкл) в ЛЕНТЕ делаем пропорциональным размеру плитки. В MixerTile
+   он жёстко 128px — в большой плитке/сетке это ок, но в мелкой плитке ленты (~96px) круг больше
+   самой плитки, обрезается краями, а буква не влезает → «кривой» (правка 4). Container-query units
+   (cqmin = % от меньшей стороны плитки) масштабируют круг и букву заодно, сохраняя пропорцию.
+   Скоуп — только .lk-carousel, поэтому главную плитку и сетку не трогаем. */
+.lk-carousel .lk-participant-placeholder {
+  container-type: size;
+}
+.lk-carousel .lk-participant-placeholder > * {
+  width: 44cqmin !important;
+  height: 44cqmin !important;
+  font-size: 18cqmin !important; /* ~0.42 от ширины — та же пропорция буквы, что в Avatar */
+}

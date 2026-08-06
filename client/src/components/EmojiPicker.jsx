@@ -45,7 +45,7 @@ function EmojiPicker({ onPick }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-neutral-800 hover:text-gray-100"
+        className="flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:bg-neutral-700 hover:text-gray-100"
         title="Эмодзи"
         aria-label="Эмодзи"
       >
@@ -53,8 +53,8 @@ function EmojiPicker({ onPick }) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-lg border border-neutral-800 bg-neutral-900 p-2 shadow-xl">
-          <div className="dark-scroll grid max-h-48 grid-cols-8 gap-0.5 overflow-y-auto">
+        <div className="absolute bottom-full right-0 z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-800 bg-neutral-900 p-2 shadow-xl">
+          <div className="dark-scroll grid max-h-48 grid-cols-8 gap-0.5 overflow-y-auto overflow-x-hidden">
             {EMOJIS.map((e, i) => (
               <button
                 key={i}

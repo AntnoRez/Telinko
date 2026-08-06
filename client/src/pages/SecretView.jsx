@@ -1,103 +1,82 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { decryptSecret } from '../utils/crypto'
+import { useCopied } from '../utils/useCopied'
+import GlowBackground from '../components/GlowBackground'
 
-// Страница просмотра секрета. Ключ шифрования берём из #-фрагмента ссылки (на сервер он
-// никогда не уходит). Порядок: meta (GET, не сжигает) → показать → consume (POST, сжигает)
-// → расшифровать в браузере.
+// Забрать шифроблоб РОВНО ОДИН РАЗ на id за время жизни вкладки. consume — одноразовый (POST
+// сжигает секрет): без этого кэша StrictMode (dev — двойной mount) или любой ре-рендер сделали
+// бы второй POST, который вернул бы 404 → ложный «секрет не найден». Map живёт на уровне модуля,
+// поэтому переживает ремоунт компонента (в отличие от useRef, который при ремоунте пересоздаётся).
+const consumePromises = new Map()
+function consumeOnce(id) {
+  if (!consumePromises.has(id)) {
+    const p = api.post(`/api/secrets/${id}`).then((r) => r.data)
+    // Успех держим навсегда (второй POST сжёг бы секрет повторно → 404). А вот неудачу (сеть/404)
+    // из кэша убираем: при 404 повтор тоже даст 404 (безвредно), а сетевую ошибку можно переиграть,
+    // вернувшись на страницу, — иначе rejected-промис завис бы до полной перезагрузки вкладки.
+    p.catch(() => consumePromises.delete(id))
+    consumePromises.set(id, p)
+  }
+  return consumePromises.get(id)
+}
+
+// Страница просмотра секрета. Ключ шифрования берём из #-фрагмента ссылки (на сервер он никогда
+// не уходит). Секрет показывается СРАЗУ при открытии (без кнопки): забираем шифроблоб (POST —
+// сжигает) и расшифровываем в браузере. Открыл ссылку — секрет израсходован (он одноразовый).
 function SecretView() {
   const { id } = useParams()
   const urlKey = window.location.hash.slice(1) // ключ после '#', без самой решётки
 
-  const [status, setStatus] = useState('loading') // loading|badlink|notfound|ready|revealed|error
+  const [status, setStatus] = useState('loading') // loading|badlink|notfound|revealed|error
   const [secretText, setSecretText] = useState('')
-  const [revealing, setRevealing] = useState(false)
   const [error, setError] = useState(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, copyText] = useCopied()
 
-  // Шаг 1: метаданные по GET (НЕ сжигает — важно для превью-ботов).
+  // При открытии: сразу consume (сжигает) + расшифровка. consumeOnce гарантирует единственный POST.
   useEffect(() => {
     let cancelled = false
     if (!urlKey) {
-      setStatus('badlink')
+      setStatus('badlink') // ссылка без ключа — расшифровать нечем, сервер не трогаем
       return
     }
-    api
-      .get(`/api/secrets/${id}/meta`)
-      .then((res) => {
+
+    async function run() {
+      // 1. Забираем шифроблоб (POST — сжигает, ровно один раз на id).
+      let blob
+      try {
+        blob = await consumeOnce(id)
+      } catch (err) {
         if (cancelled) return
-        if (!res.data.exists) {
-          setStatus('notfound')
-          return
-        }
-        setStatus('ready')
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('error')
-      })
+        // 404 → секрет уже сгорел/истёк; иначе сеть/сервер.
+        setStatus(err?.response?.status === 404 ? 'notfound' : 'error')
+        return
+      }
+      if (cancelled) return
+
+      // 2. Расшифровка локально ключом из #. Битый ключ/повреждённые данные → AES-GCM бросит.
+      try {
+        const text = await decryptSecret(blob, urlKey)
+        if (cancelled) return
+        setSecretText(text)
+        setStatus('revealed')
+      } catch {
+        if (cancelled) return
+        setError('Не удалось расшифровать секрет — возможно, ссылка повреждена.')
+        setStatus('error')
+      }
+    }
+
+    run()
     return () => {
       cancelled = true
     }
   }, [id, urlKey])
 
-  // Шифроблоб, уже полученный с сервера. Храним его, чтобы при неверном пароле
-  // НЕ ходить на сервер второй раз: burn-секрет сгорает при первом же consume,
-  // и повторный POST вернул бы 404 — хотя данные для новой попытки уже у нас.
-  const blobRef = useRef(null)
-
-  // Шаг 2: забрать шифроблоб (POST — сжигает, если burn) и расшифровать.
-  async function handleReveal(e) {
-    e?.preventDefault()
-    setError(null)
-    setRevealing(true)
-
-    // 2a. Забираем блоб с сервера только один раз, дальше работаем с сохранённым.
-    if (!blobRef.current) {
-      try {
-        const res = await api.post(`/api/secrets/${id}`) // consume
-        blobRef.current = res.data
-      } catch (err) {
-        if (err.response?.status === 404) {
-          // Секрет уже сгорел или истёк.
-          setStatus('notfound')
-        } else {
-          // Сеть/сервер: блоб не получили, секрет НЕ израсходован — можно повторить.
-          setError('Не удалось получить секрет с сервера. Попробуй ещё раз.')
-        }
-        setRevealing(false)
-        return
-      }
-    }
-
-    // 2b. Расшифровка локально ключом из #. Битый ключ/повреждённые данные → AES-GCM бросит.
-    try {
-      const text = await decryptSecret(blobRef.current, urlKey)
-      setSecretText(text)
-      setStatus('revealed')
-    } catch {
-      setError('Не удалось расшифровать секрет')
-    } finally {
-      setRevealing(false)
-    }
-  }
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(secretText)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // буфер недоступен — игнорируем
-    }
-  }
-
   return (
-    <div className="relative min-h-screen overflow-hidden bg-neutral-950 text-gray-100">
-      {/* Индиго-свечение — единый тёмный вайб. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[140px]" />
-      </div>
+    <div className="relative min-h-dvh overflow-hidden bg-neutral-950 text-gray-100">
+      <GlowBackground variant="violet" />
 
       <div className="relative">
         <header className="mx-auto flex max-w-lg items-center px-4 sm:px-6 py-4">
@@ -110,7 +89,7 @@ function SecretView() {
           <h1 className="mb-6 text-2xl font-semibold">Секретное сообщение</h1>
 
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4 sm:p-6 backdrop-blur-sm">
-            {status === 'loading' && <p className="text-gray-400">Загрузка…</p>}
+            {status === 'loading' && <p className="text-gray-400">Расшифровка…</p>}
 
             {status === 'badlink' && (
               <p className="text-red-400">
@@ -125,24 +104,8 @@ function SecretView() {
               </p>
             )}
 
-            {status === 'error' && <p className="text-red-400">Не удалось загрузить секрет.</p>}
-
-            {status === 'ready' && (
-              <form onSubmit={handleReveal} className="flex flex-col gap-4">
-                <p className="text-sm text-gray-400">
-                  Нажми, чтобы расшифровать и показать секрет. Он одноразовый — после этого сгорит.
-                </p>
-
-                {error && <p className="text-sm text-red-400">{error}</p>}
-
-                <button
-                  type="submit"
-                  disabled={revealing}
-                  className="self-start rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
-                >
-                  {revealing ? 'Расшифровка…' : 'Показать секрет'}
-                </button>
-              </form>
+            {status === 'error' && (
+              <p className="text-red-400">{error || 'Не удалось загрузить секрет.'}</p>
             )}
 
             {status === 'revealed' && (
@@ -151,13 +114,13 @@ function SecretView() {
                   {secretText}
                 </div>
                 <button
-                  onClick={handleCopy}
+                  onClick={() => copyText(secretText)}
                   className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
                 >
                   {copied ? 'Скопировано!' : 'Копировать'}
                 </button>
                 <p className="text-xs text-gray-500">
-                  Сохрани содержимое сейчас — если ссылка была одноразовой, повторно она уже не откроется.
+                  Сохрани содержимое сейчас — секрет одноразовый, повторно ссылка уже не откроется.
                 </p>
               </div>
             )}

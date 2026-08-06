@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { encryptSecret } from '../utils/crypto'
+import { useCopied } from '../utils/useCopied'
 import { WarnIcon } from './icons'
 
 // Варианты срока жизни ссылки. seconds:null = бессрочно.
@@ -26,26 +27,46 @@ function SecretCreateForm({ dark = false, onCreated }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [resultUrl, setResultUrl] = useState(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, copyUrl] = useCopied()
   // Кастомный дропдаун срока (вместо нативного <select>): на мобилке его список уходил за
   // нижнюю кромку и не скроллился — нижние варианты были недостижимы. Свой список со скроллом
   // (max-h) и флипом вверх, если снизу мало места.
+  // Позиционируем через position: fixed по координатам кнопки — иначе внутри модалки секретки
+  // (у неё overflow-y-auto) абсолютный список обрезался бы нижним краем модалки (правка 9).
   const [ttlOpen, setTtlOpen] = useState(false)
-  const [ttlUp, setTtlUp] = useState(false)
+  const [ttlPos, setTtlPos] = useState(null) // { left, top } | { left, bottom } — для fixed
   const ttlRef = useRef(null)
   const ttlBtnRef = useRef(null)
+  const ttlListRef = useRef(null) // сам выпадающий список — чтобы не закрывать его при СВОЁМ скролле
 
   useEffect(() => {
     if (!ttlOpen) return
     const onDoc = (e) => { if (!ttlRef.current?.contains(e.target)) setTtlOpen(false) }
+    // Скролл модалки/страницы отвязал бы fixed-список от кнопки — на такой скролл закрываем.
+    // Но скролл ВНУТРИ самого списка (его max-h + overflow) не трогаем — иначе список нельзя
+    // прокрутить. capture: true — ловим и скролл вложенного контейнера модалки, а не только окна.
+    const onScroll = (e) => {
+      if (ttlListRef.current?.contains(e.target)) return
+      setTtlOpen(false)
+    }
     document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [ttlOpen])
 
   function toggleTtl() {
     if (!ttlOpen && ttlBtnRef.current) {
       const rect = ttlBtnRef.current.getBoundingClientRect()
-      setTtlUp(window.innerHeight - rect.bottom < 240) // мало места снизу → открываем вверх
+      const openUp = window.innerHeight - rect.bottom < 240 // мало места снизу → открываем вверх
+      setTtlPos({
+        left: rect.left,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      })
     }
     setTtlOpen((v) => !v)
   }
@@ -81,20 +102,10 @@ function SecretCreateForm({ dark = false, onCreated }) {
       const url = `${window.location.origin}/secret/${res.data.id}#${urlKey}`
       if (onCreated) onCreated(url) // чат: вернуть ссылку в поле сообщения
       else setResultUrl(url) // страница/модалка: показать блок с готовой ссылкой
-    } catch {
-      setError('Не удалось создать секрет')
+    } catch (err) {
+      setError(err?.response?.status === 413 ? 'Секрет слишком большой' : 'Не удалось создать секрет')
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(resultUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // буфер недоступен (не secure context) — тихо игнорируем
     }
   }
 
@@ -103,7 +114,6 @@ function SecretCreateForm({ dark = false, onCreated }) {
     setTtlIndex(TTL_OPTIONS.length - 1) // «Бессрочно»
     setResultUrl(null)
     setError(null)
-    setCopied(false)
   }
 
   // --- Результат: готовая ссылка ---
@@ -122,7 +132,7 @@ function SecretCreateForm({ dark = false, onCreated }) {
             className={`flex-1 min-w-0 rounded-lg px-3 py-2 font-mono text-sm ${field}`}
           />
           <button
-            onClick={handleCopy}
+            onClick={() => copyUrl(resultUrl)}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
           >
             {copied ? 'Скопировано!' : 'Копировать'}
@@ -150,6 +160,7 @@ function SecretCreateForm({ dark = false, onCreated }) {
         onChange={(e) => setText(e.target.value)}
         placeholder="Секрет: пароль, токен, приватная заметка…"
         rows={5}
+        maxLength={20000}
         className={`rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${field}`}
       />
 
@@ -173,9 +184,11 @@ function SecretCreateForm({ dark = false, onCreated }) {
           </button>
           {ttlOpen && (
             <div
-              className={`absolute left-0 z-50 max-h-48 w-36 overflow-y-auto rounded-lg border shadow-xl ${
+              ref={ttlListRef}
+              style={ttlPos}
+              className={`fixed z-[60] max-h-48 w-36 overflow-y-auto rounded-lg border shadow-xl ${
                 dark ? 'border-neutral-700 bg-neutral-800' : 'border-gray-300 bg-white'
-              } ${ttlUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}
+              }`}
             >
               {TTL_OPTIONS.map((opt, i) => (
                 <button

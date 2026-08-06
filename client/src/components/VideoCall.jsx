@@ -10,7 +10,6 @@ import {
   VideoTrack,
   ParticipantName,
   TrackMutedIndicator,
-  ConnectionQualityIndicator,
   useTracks,
   useTrackToggle,
   useEnsureTrackRef,
@@ -25,12 +24,15 @@ import { Track } from 'livekit-client'
 import '@livekit/components-styles' // дефолтные стили сетки видео и панели управления
 import './videocall-overrides.css' // наши правки поверх (мгновенная рамка "говорит")
 import { api } from '../api/client'
+import { useCopied } from '../utils/useCopied'
 import { AudioMixerProvider, useAudioMixer } from './AudioMixerContext'
 import CallAudio from './CallAudio'
 import ParticipantTileControls from './ParticipantTileControls'
 import VolumeControl from './VolumeControl'
+import ConnectionInfo from './ConnectionInfo'
+import { RttProvider } from './RttContext'
 import Avatar from './Avatar'
-import { LockIcon } from './icons'
+import { LockIcon, FullscreenIcon, CheckIcon } from './icons'
 
 // Стабильный на вкладку идентификатор устройства. Живёт в sessionStorage: переживает
 // перезагрузку страницы, но у каждой вкладки/устройства свой. Нужен, чтобы в один
@@ -76,40 +78,6 @@ function CallTimer({ startedAt }) {
       <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
       {formatDuration((now - startMs) / 1000)}
     </div>
-  )
-}
-
-// Монохромная иконка «развернуть / свернуть» (углы наружу / внутрь).
-function FullscreenIcon({ active }) {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {active ? (
-        // свернуть — углы внутрь
-        <>
-          <path d="M8 3v3a2 2 0 0 1-2 2H3" />
-          <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-          <path d="M3 16h3a2 2 0 0 1 2 2v3" />
-          <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-        </>
-      ) : (
-        // развернуть — углы наружу
-        <>
-          <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-          <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-          <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-          <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-        </>
-      )}
-    </svg>
   )
 }
 
@@ -182,7 +150,9 @@ function MixerTile({ trackRef: trackRefProp }) {
           />
           <ParticipantName />
         </div>
-        <ConnectionQualityIndicator className="lk-participant-metadata-item" />
+        <div className="lk-participant-metadata-item">
+          <ConnectionInfo participant={trackRef.participant} />
+        </div>
       </div>
 
       {/* Наш регулятор громкости этого участника. */}
@@ -270,13 +240,6 @@ function LinkIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  )
-}
-function CheckIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 6L9 17l-5-5" />
     </svg>
   )
 }
@@ -541,16 +504,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
   const cam = useTrackToggle({ source: Track.Source.Camera })
   const screen = useTrackToggle({ source: Track.Source.ScreenShare })
 
-  const [copied, setCopied] = useState(false)
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(inviteUrl ?? window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // буфер недоступен — тихо игнорируем
-    }
-  }
+  const [copied, copyLink] = useCopied(1500)
 
   // Приём просьбы «включите мик/камеру» от организатора (data-канал, топик moderation).
   // Форсить нельзя — показываем тост с кнопкой «Включить», участник решает сам.
@@ -649,7 +603,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
     {
       key: 'fullscreen',
       label: isFullscreen ? 'Свернуть' : 'На весь экран',
-      icon: <FullscreenIcon active={isFullscreen} />,
+      icon: <FullscreenIcon active={isFullscreen} size={18} />,
       onClick: onToggleFullscreen,
       node: (
         <button
@@ -657,7 +611,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
           className="lk-button flex items-center justify-center text-white"
           title={isFullscreen ? 'Свернуть' : 'На весь экран'}
         >
-          <FullscreenIcon active={isFullscreen} />
+          <FullscreenIcon active={isFullscreen} size={18} />
         </button>
       ),
     },
@@ -679,7 +633,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
       key: 'link',
       label: copied ? 'Скопировано!' : 'Пригласить — копировать ссылку',
       icon: copied ? <CheckIcon /> : <LinkIcon />,
-      onClick: copyLink,
+      onClick: () => copyLink(inviteUrl ?? window.location.href),
     },
     {
       key: 'secret',
@@ -697,8 +651,10 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
   )
 
   return (
-    // overflow-hidden клипает горизонтальный перелив мерной копии тулбара (чтобы не было
-    // скролла страницы). Всплывашки тулбара открываются ВВЕРХ, внутри этой области — не режутся.
+    // RttProvider — обмен RTT по data-каналу для «пинга собеседника» (E2E) в плитках.
+    <RttProvider>
+    {/* overflow-hidden клипает горизонтальный перелив мерной копии тулбара (чтобы не было
+        скролла страницы). Всплывашки тулбара открываются ВВЕРХ, внутри этой области — не режутся. */}
     <div className="relative flex h-full flex-col overflow-hidden">
       {/* Таймер длительности звонка — оверлей в левом верхнем углу, поверх видео-сетки. */}
       <CallTimer startedAt={startedAt} />
@@ -762,6 +718,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
         leaveButton={leaveButton}
       />
     </div>
+    </RttProvider>
   )
 }
 

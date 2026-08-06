@@ -13,6 +13,8 @@ import ImageLightbox from '../components/ImageLightbox'
 import VideoPlayer from '../components/VideoPlayer'
 import Avatar from '../components/Avatar'
 import LoginModal from '../components/LoginModal'
+import GlowBackground from '../components/GlowBackground'
+import { FileIcon } from '../components/icons'
 import { roomDisplayName, isReserved } from '../utils/room'
 
 // Время отправки в формате ЧЧ:ММ по локали браузера (напр. "14:05").
@@ -56,11 +58,6 @@ function formatSize(bytes) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
 }
-
-// Иконка файла/скачивания.
-const FileIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
-)
 
 // Рендер вложения в сообщении: фото → картинка, видео → плеер, прочее → карточка «скачать».
 function MessageAttachment({ code, message }) {
@@ -124,6 +121,10 @@ const CamOffIcon = () => (
 const KickIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 17l5-5-5-5M21 12H9M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2" /></svg>
 )
+// Шеврон-«раскрыть» рядом с участником на таче (крутится при раскрытии тулбара модерации).
+const ChevronIcon = ({ open }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${open ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
+)
 
 
 function Room() {
@@ -148,7 +149,6 @@ function Room() {
   const [startedAt, setStartedAt] = useState(null) // момент старта звонка (для таймера длительности)
 
   const [messages, setMessages] = useState([])
-  const [participants, setParticipants] = useState([]) // кто сейчас онлайн в комнате
   const [text, setText] = useState('')
   const [pendingAtt, setPendingAtt] = useState(null) // загруженное вложение к отправке: { key,type,name,size,preview }
   const [uploading, setUploading] = useState(false)
@@ -175,7 +175,11 @@ function Room() {
   const chatOpenRef = useRef(false) // актуальное состояние чата для обработчика сокета (без stale-замыкания)
   const bottomRef = useRef(null)
   const inputRef = useRef(null) // поле ввода сообщения — для вставки эмодзи в позицию курсора
+  const attPreviewRef = useRef(null) // текущий objectURL превью вложения — чтобы revoke при unmount (RO2)
+  const resizeCleanupRef = useRef(null) // снятие window-слушателей ресайза, если unmount во время drag (RO3)
   const [liveParticipants, setLiveParticipants] = useState([]) // живой состав из LiveKit (мик/камера)
+  const [modError, setModError] = useState(null) // ошибка последнего действия модерации (RO5)
+  const [expandedId, setExpandedId] = useState(null) // раскрытый тулбар модерации участника (только тач)
   // Стабильный колбэк для VideoCall — он репортит сюда живое состояние участников.
   const onLiveParticipants = useCallback((list) => setLiveParticipants(list), [])
 
@@ -266,14 +270,10 @@ function Room() {
     function onHistory({ messages }) {
       setMessages(messages)
     }
-    function onPresence({ participants }) {
-      setParticipants(participants)
-    }
     socket.on('connect', onConnect)
     socket.on('call:started', onStarted)
     socket.on('message:new', onNewMessage)
     socket.on('chat:history', onHistory)
-    socket.on('presence:update', onPresence)
     socket.connect()
 
     return () => {
@@ -281,7 +281,6 @@ function Room() {
       socket.off('call:started', onStarted)
       socket.off('message:new', onNewMessage)
       socket.off('chat:history', onHistory)
-      socket.off('presence:update', onPresence)
       socket.disconnect()
     }
   }, [entered, code])
@@ -314,6 +313,16 @@ function Room() {
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
 
+  // Уборка при размонтировании (уход из комнаты): освобождаем objectURL недоотправленного превью
+  // (RO2) и снимаем window-слушатели ресайза, если ушли прямо во время перетаскивания (RO3).
+  useEffect(() => () => {
+    if (attPreviewRef.current) URL.revokeObjectURL(attPreviewRef.current)
+    resizeCleanupRef.current?.()
+  }, [])
+
+  // Держим в ref актуальный objectURL превью — cleanup выше видит его на момент unmount.
+  useEffect(() => { attPreviewRef.current = pendingAtt?.preview || null }, [pendingAtt])
+
   // Тянем перегородку между чатом (слева) и видео. Чат прижат к левому краю окна, поэтому
   // его ширина = X курсора. Минимум — 1/5 окна; максимум оставляет место под звонок (VIDEO_MIN_WIDTH)
   // и под панель участников, если она открыта — чтобы видео не схлопывалось.
@@ -329,10 +338,12 @@ function Room() {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
       document.body.style.userSelect = ''
+      resizeCleanupRef.current = null
     }
     document.body.style.userSelect = 'none' // не выделять текст во время перетаскивания
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+    resizeCleanupRef.current = onUp // чтобы unmount во время drag снял слушатели (RO3)
   }
 
   function handlePrejoinDone(prefs) {
@@ -496,8 +507,11 @@ function Room() {
   async function moderate(path, body) {
     try {
       await api.post(`/api/rooms/${code}/moderate/${path}`, body)
-    } catch {
-      // тихо; полноценные тосты об ошибках можно добавить позже
+      setModError(null)
+    } catch (err) {
+      // Показываем ошибку модератору (раньше глоталась молча — RO5). Гасим через 3с.
+      setModError(err?.response?.data?.error || 'Действие не выполнено')
+      setTimeout(() => setModError(null), 3000)
     }
   }
 
@@ -510,7 +524,7 @@ function Room() {
 
   if (phase === 'checking') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-gray-400">
+      <div className="min-h-dvh flex items-center justify-center bg-neutral-950 text-gray-400">
         Подключение…
       </div>
     )
@@ -518,7 +532,7 @@ function Room() {
 
   if (phase === 'notfound') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-neutral-950 text-gray-100">
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-4 bg-neutral-950 text-gray-100">
         <p className="text-lg">{notFoundMsg}</p>
         <button onClick={() => navigate('/')} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500">
           На главную
@@ -529,11 +543,8 @@ function Room() {
 
   if (phase === 'waiting') {
     return (
-      <div className="relative min-h-screen flex flex-col items-center justify-center gap-6 overflow-hidden bg-neutral-950 text-gray-100 px-4 text-center">
-        {/* Индиго-свечение — единый тёмный вайб. */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[140px]" />
-        </div>
+      <div className="relative min-h-dvh flex flex-col items-center justify-center gap-6 overflow-hidden bg-neutral-950 text-gray-100 px-4 text-center">
+        <GlowBackground />
 
         <div className="relative">
           <h1 className="text-2xl sm:text-3xl font-semibold">Просьба присоединиться к встрече…</h1>
@@ -565,6 +576,7 @@ function Room() {
           <LoginModal
             title="Стать организатором"
             subtitle="Чтобы запустить звонок и управлять участниками."
+            initialName={user?.displayName || ''}
             onClose={() => setShowOrgLogin(false)}
             onSuccess={() => { setShowOrgLogin(false); doClaim() }}
           />
@@ -577,7 +589,7 @@ function Room() {
   // нижнем тулбаре (внутри VideoCall), шапки нет. Чат и участники — выезжающие сбоку панели.
   return (
     // pseudoFs (iOS) → fixed inset-0 z-[60] накрывает весь вьюпорт (вместе с чатом/участниками).
-    <div ref={callRef} className={pseudoFs ? 'fixed inset-0 z-[60] flex bg-black' : 'relative flex h-screen bg-black'}>
+    <div ref={callRef} className={pseudoFs ? 'fixed inset-0 z-[60] flex bg-black' : 'relative flex h-dvh bg-black'}>
       {/* Чат — выезжает СЛЕВА (на мобилке оверлей поверх видео). Тёмная нейтральная тема, как плитки. */}
       {chatOpen && (
         <>
@@ -595,7 +607,13 @@ function Room() {
             )}
             <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 shrink-0">
               <span className="text-sm font-medium">Чат</span>
-              <button onClick={() => setChatOpen(false)} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть чат">✕</button>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="-mr-2 flex h-9 w-9 items-center justify-center text-2xl leading-none text-gray-500 hover:text-gray-200 sm:h-auto sm:w-auto sm:text-base"
+                aria-label="Закрыть чат"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="dark-scroll flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
@@ -666,28 +684,33 @@ function Room() {
                 </div>
               )}
 
-              <div className="flex items-center gap-1 px-3 py-3">
-                <ChatAttachMenu onSecretLink={insertIntoMessage} onPickFile={handlePickFile} />
-                <EmojiPicker onPick={insertEmoji} />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Сообщение…"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onPaste={handlePaste}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSend()
-                    }
-                  }}
-                  className="flex-1 ml-1 bg-neutral-800 border border-neutral-700 text-gray-100 placeholder-gray-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+              {/* Строка ввода «пилюлей» (как в мессенджерах): единый скруглённый контейнер
+                  со скрепкой слева, полем по центру и эмодзи справа; кнопка отправки — отдельный
+                  круг рядом. Попапы скрепки/эмодзи открываются вверх относительно своих обёрток. */}
+              <div className="flex items-center gap-2 px-3 py-3">
+                <div className="flex flex-1 items-center gap-0.5 rounded-full border border-neutral-700 bg-neutral-800 pl-1 pr-1.5 focus-within:ring-2 focus-within:ring-indigo-500">
+                  <ChatAttachMenu onSecretLink={insertIntoMessage} onPickFile={handlePickFile} />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    placeholder="Сообщение…"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onPaste={handlePaste}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSend()
+                      }
+                    }}
+                    className="min-w-0 flex-1 bg-transparent px-1 py-2 text-gray-100 placeholder-gray-500 focus:outline-none"
+                  />
+                  <EmojiPicker onPick={insertEmoji} />
+                </div>
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-500"
                   title="Отправить"
                   aria-label="Отправить"
                 >
@@ -731,7 +754,13 @@ function Room() {
         <aside className="absolute inset-0 z-40 flex flex-col bg-neutral-900 text-gray-100 sm:static sm:z-auto sm:w-80 sm:shrink-0 border-l border-neutral-800">
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 shrink-0">
             <span className="font-medium">Участники ({liveParticipants.length})</span>
-            <button onClick={() => setParticipantsOpen(false)} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
+            <button
+              onClick={() => setParticipantsOpen(false)}
+              className="-mr-2 flex h-9 w-9 items-center justify-center text-2xl leading-none text-gray-500 hover:text-gray-200 sm:h-auto sm:w-auto sm:text-base"
+              aria-label="Закрыть"
+            >
+              ✕
+            </button>
           </div>
           <div className="px-4 py-3 shrink-0">
             <CopyLinkButton
@@ -740,65 +769,120 @@ function Room() {
               className="block w-full rounded-lg bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-indigo-500"
             />
           </div>
+          {modError && (
+            <div className="mx-4 mb-2 rounded bg-red-500/15 px-3 py-2 text-sm text-red-300">{modError}</div>
+          )}
           <ul className="dark-scroll flex-1 overflow-y-auto px-3 pb-4 flex flex-col gap-1">
             {liveParticipants.map((p) => {
               // Иконки показывают РЕАЛЬНОЕ состояние (live из LiveKit). Организатору клик по чужому:
               // включено → выключаем (server mute); выключено → шлём запрос на включение (ask-unmute).
               const canModerate = isOrganizer && !p.isLocal
+              const expanded = expandedId === p.identity
               return (
-                <li key={p.identity} className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-neutral-800">
-                  <Avatar userId={p.userId} name={p.name} size={32} />
-                  <span className="flex-1 truncate text-sm">
-                    {p.name}
-                    {p.isLocal && ' (вы)'}
-                    {p.userId === organizerId && <span className="ml-1 text-xs text-gray-400">· организатор</span>}
-                  </span>
+                <li key={p.identity} className="rounded-lg">
+                  <div
+                    className={`flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-neutral-800 ${canModerate ? '[@media(hover:none)]:cursor-pointer' : ''}`}
+                    // Тап по строке раскрывает тулбар модерации — только на таче и только тому,
+                    // кто может модерировать (организатор, не по себе). На десктопе тулбар скрыт,
+                    // действия — инлайновыми иконками справа (клик по строке безвреден: нечего показать).
+                    onClick={canModerate ? () => setExpandedId((id) => (id === p.identity ? null : p.identity)) : undefined}
+                  >
+                    <Avatar userId={p.userId} name={p.name} size={32} />
+                    <span className="flex-1 truncate text-sm">
+                      {p.name}
+                      {p.isLocal && ' (вы)'}
+                      {p.userId === organizerId && <span className="ml-1 text-xs text-gray-400">· организатор</span>}
+                    </span>
 
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <button
-                      disabled={!canModerate}
-                      title={
-                        !canModerate
-                          ? p.micOn ? 'Микрофон включён' : 'Микрофон выключен'
-                          : p.micOn ? 'Выключить микрофон' : 'Попросить включить микрофон'
-                      }
-                      onClick={() =>
-                        p.micOn
-                          ? moderate('mute', { targetUserId: p.userId, source: 'microphone' })
-                          : moderate('ask-unmute', { targetUserId: p.userId, source: 'microphone' })
-                      }
-                      className={`rounded p-1 ${p.micOn ? 'text-gray-300' : 'text-red-500'} ${canModerate ? 'hover:bg-neutral-700' : 'cursor-default'}`}
-                    >
-                      {p.micOn ? <MicIcon /> : <MicOffIcon />}
-                    </button>
-
-                    <button
-                      disabled={!canModerate}
-                      title={
-                        !canModerate
-                          ? p.camOn ? 'Камера включена' : 'Камера выключена'
-                          : p.camOn ? 'Выключить камеру' : 'Попросить включить камеру'
-                      }
-                      onClick={() =>
-                        p.camOn
-                          ? moderate('mute', { targetUserId: p.userId, source: 'camera' })
-                          : moderate('ask-unmute', { targetUserId: p.userId, source: 'camera' })
-                      }
-                      className={`rounded p-1 ${p.camOn ? 'text-gray-300' : 'text-red-500'} ${canModerate ? 'hover:bg-neutral-700' : 'cursor-default'}`}
-                    >
-                      {p.camOn ? <CamIcon /> : <CamOffIcon />}
-                    </button>
-
-                    {canModerate && (
+                    {/* Десктоп (есть hover): инлайновые иконки — индикатор состояния + кнопки модерации. */}
+                    <div className="hidden shrink-0 items-center gap-0.5 [@media(hover:hover)]:flex">
                       <button
-                        title="Выгнать из звонка"
+                        disabled={!canModerate}
+                        title={
+                          !canModerate
+                            ? p.micOn ? 'Микрофон включён' : 'Микрофон выключен'
+                            : p.micOn ? 'Выключить микрофон' : 'Попросить включить микрофон'
+                        }
+                        onClick={() =>
+                          p.micOn
+                            ? moderate('mute', { targetUserId: p.userId, source: 'microphone' })
+                            : moderate('ask-unmute', { targetUserId: p.userId, source: 'microphone' })
+                        }
+                        className={`rounded p-1 ${p.micOn ? 'text-gray-300' : 'text-red-500'} ${canModerate ? 'hover:bg-neutral-700' : 'cursor-default'}`}
+                      >
+                        {p.micOn ? <MicIcon /> : <MicOffIcon />}
+                      </button>
+
+                      <button
+                        disabled={!canModerate}
+                        title={
+                          !canModerate
+                            ? p.camOn ? 'Камера включена' : 'Камера выключена'
+                            : p.camOn ? 'Выключить камеру' : 'Попросить включить камеру'
+                        }
+                        onClick={() =>
+                          p.camOn
+                            ? moderate('mute', { targetUserId: p.userId, source: 'camera' })
+                            : moderate('ask-unmute', { targetUserId: p.userId, source: 'camera' })
+                        }
+                        className={`rounded p-1 ${p.camOn ? 'text-gray-300' : 'text-red-500'} ${canModerate ? 'hover:bg-neutral-700' : 'cursor-default'}`}
+                      >
+                        {p.camOn ? <CamIcon /> : <CamOffIcon />}
+                      </button>
+
+                      {canModerate && (
+                        <button
+                          title="Выгнать из звонка"
+                          onClick={() => moderate('kick', { targetUserId: p.userId })}
+                          className="rounded p-1 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+                        >
+                          <KickIcon />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Тач (нет hover): неинтерактивные индикаторы состояния + шеврон «раскрыть» у модерируемых. */}
+                    <div className="flex shrink-0 items-center gap-1.5 text-gray-400 [@media(hover:hover)]:hidden">
+                      <span className={p.micOn ? 'text-gray-400' : 'text-red-500'}>{p.micOn ? <MicIcon /> : <MicOffIcon />}</span>
+                      <span className={p.camOn ? 'text-gray-400' : 'text-red-500'}>{p.camOn ? <CamIcon /> : <CamOffIcon />}</span>
+                      {canModerate && <ChevronIcon open={expanded} />}
+                    </div>
+                  </div>
+
+                  {/* Раскрывающийся тулбар модерации — только тач + организатор. Скрыт на десктопе. */}
+                  {canModerate && expanded && (
+                    <div className="flex flex-wrap gap-2 px-2 pb-2 [@media(hover:hover)]:hidden">
+                      <button
+                        onClick={() =>
+                          p.micOn
+                            ? moderate('mute', { targetUserId: p.userId, source: 'microphone' })
+                            : moderate('ask-unmute', { targetUserId: p.userId, source: 'microphone' })
+                        }
+                        className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-gray-200 hover:bg-neutral-700"
+                      >
+                        {p.micOn ? <MicIcon /> : <MicOffIcon />}
+                        {p.micOn ? 'Выкл. микрофон' : 'Вкл. микрофон'}
+                      </button>
+                      <button
+                        onClick={() =>
+                          p.camOn
+                            ? moderate('mute', { targetUserId: p.userId, source: 'camera' })
+                            : moderate('ask-unmute', { targetUserId: p.userId, source: 'camera' })
+                        }
+                        className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-2 text-sm text-gray-200 hover:bg-neutral-700"
+                      >
+                        {p.camOn ? <CamIcon /> : <CamOffIcon />}
+                        {p.camOn ? 'Выкл. камеру' : 'Вкл. камеру'}
+                      </button>
+                      <button
                         onClick={() => moderate('kick', { targetUserId: p.userId })}
-                        className="rounded p-1 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+                        className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400 hover:bg-red-500/20"
                       >
                         <KickIcon />
+                        Выгнать
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </li>
               )
             })}

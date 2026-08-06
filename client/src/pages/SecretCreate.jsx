@@ -1,16 +1,14 @@
 import { Link } from 'react-router-dom'
 import SecretCreateForm from '../components/SecretCreateForm'
+import GlowBackground from '../components/GlowBackground'
 import { LockIcon } from '../components/icons'
 
 // Страница создания секрета — тонкая обёртка над переиспользуемой формой (тёмная тема).
 // Публичная (отправитель может быть не залогинен).
 function SecretCreate() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-neutral-950 text-gray-100">
-      {/* Индиго-свечение — единый тёмный вайб со звонком и главной. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[140px]" />
-      </div>
+    <div className="relative min-h-dvh overflow-hidden bg-neutral-950 text-gray-100">
+      <GlowBackground variant="violet" />
 
       <div className="relative">
         <header className="mx-auto flex max-w-lg items-center px-4 sm:px-6 py-4">

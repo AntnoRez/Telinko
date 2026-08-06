@@ -6,6 +6,7 @@ import Prejoin from './Prejoin'
 import Avatar from '../components/Avatar'
 import ProfileModal from '../components/ProfileModal'
 import LoginModal from '../components/LoginModal'
+import GlowBackground from '../components/GlowBackground'
 import { VideoIcon, LockIcon, TelinkoLogo } from '../components/icons'
 import { isReserved } from '../utils/room'
 
@@ -90,12 +91,8 @@ function Home() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-neutral-950 text-gray-100">
-      {/* Фоновое индиго-свечение — «крутой» тёмный вайб, единый со звонком по нейтральному фону. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-48 left-1/2 h-[38rem] w-[38rem] -translate-x-1/2 rounded-full bg-indigo-600/20 blur-[140px]" />
-        <div className="absolute top-1/3 -right-40 h-[30rem] w-[30rem] rounded-full bg-violet-600/10 blur-[140px]" />
-      </div>
+    <div className="relative min-h-dvh overflow-hidden bg-neutral-950 text-gray-100">
+      <GlowBackground variant="home" />
 
       <div className="relative">
         {/* Шапка: бренд слева, статус входа справа. */}

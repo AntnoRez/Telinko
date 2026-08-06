@@ -23,7 +23,7 @@ function App() {
   return (
     // Suspense-фолбэк — тёмная заглушка (в тон теме), пока подгружается чанк ленивой страницы.
     // Не белый экран: на мобилке переход между страницами не мигает.
-    <Suspense fallback={<div className="min-h-screen bg-neutral-950" />}>
+    <Suspense fallback={<div className="min-h-dvh bg-neutral-950" />}>
     <Routes>
       {/* Главная-лончер — публичная. Вход/регистрация — модалкой на самой главной (LoginModal),
           отдельных страниц /login и /register больше нет. */}

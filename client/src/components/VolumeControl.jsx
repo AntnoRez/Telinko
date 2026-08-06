@@ -92,7 +92,8 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange, title, pop
             value={volume}
             disabled={muted}
             onChange={(e) => onVolumeChange(Number(e.target.value))}
-            className="w-24 accent-neutral-200"
+            // На таче (нет hover) слайдер шире и выше — по нему проще попасть пальцем (правка 11).
+            className="w-24 accent-neutral-200 [@media(hover:none)]:h-2 [@media(hover:none)]:w-44"
           />
           <span className="w-9 text-right text-[10px] tabular-nums text-white">
             {Math.round(volume * 100)}%

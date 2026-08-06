@@ -4,6 +4,7 @@ import { roomDisplayName } from '../utils/room'
 import CopyLinkButton from '../components/CopyLinkButton'
 import Avatar from '../components/Avatar'
 import LoginModal from '../components/LoginModal'
+import GlowBackground from '../components/GlowBackground'
 
 // Иконки микрофона/камеры (вкл/выкл). currentColor наследует цвет кнопки.
 function MicIcon({ off }) {
@@ -119,11 +120,8 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
   const displayName = roomDisplayName(code)
 
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center gap-6 overflow-hidden bg-neutral-950 text-gray-100 px-4">
-      {/* Индиго-свечение — тот же тёмный вайб, что на главной и в звонке. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[140px]" />
-      </div>
+    <div className="relative min-h-dvh flex flex-col items-center justify-center gap-6 overflow-hidden bg-neutral-950 text-gray-100 px-4">
+      <GlowBackground />
 
       <div className="relative text-center">
         <h1 className="text-2xl sm:text-3xl font-semibold">Присоединиться к встрече</h1>
@@ -243,6 +241,7 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
         <LoginModal
           title="Войти в аккаунт"
           subtitle="Чтобы зайти под своим аккаунтом, а не гостем."
+          initialName={trimmed}
           onClose={() => setShowLogin(false)}
           onSuccess={() => setShowLogin(false)}
         />

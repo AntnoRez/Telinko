@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { FullscreenIcon, DownloadIcon, CheckIcon } from './icons'
 
 // --- Иконки контролов (fill для play/pause, stroke для остального). ---
 const PlayIcon = () => (
@@ -17,23 +18,8 @@ const VolumeIcon = ({ muted }) => (
     )}
   </svg>
 )
-const FullscreenIcon = ({ active }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    {active ? (
-      <><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></>
-    ) : (
-      <><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></>
-    )}
-  </svg>
-)
 const MoreIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
-)
-const DownloadIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-)
-const CheckIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
 )
 
 const SPEEDS = [0.5, 1, 1.5, 2]
@@ -80,6 +66,10 @@ function VideoPlayer({ src, name }) {
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [menuOpen])
+
+  // При размонтировании гасим таймер авто-скрытия контролов — иначе setControls сработает уже
+  // после unmount (VP1). hideTimer живёт в ref, поэтому чистим один раз на выходе.
+  useEffect(() => () => clearTimeout(hideTimer.current), [])
 
   // Показать контролы и (если играет) спрятать через 2.5с бездействия.
   function poke() {
@@ -190,7 +180,7 @@ function VideoPlayer({ src, name }) {
         {menuOpen && (
           <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
             <button onClick={download} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-gray-200 hover:bg-neutral-800">
-              <DownloadIcon />
+              <DownloadIcon size={18} />
               Скачать
             </button>
             <div className="my-1 border-t border-neutral-800" />
@@ -202,7 +192,7 @@ function VideoPlayer({ src, name }) {
                 className="flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-neutral-800"
               >
                 <span>{s}×</span>
-                {speed === s && <CheckIcon />}
+                {speed === s && <CheckIcon size={16} />}
               </button>
             ))}
           </div>

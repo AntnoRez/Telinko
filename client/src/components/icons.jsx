@@ -80,3 +80,50 @@ export function WarnIcon(props) {
     </svg>
   )
 }
+
+// --- Общие иконки контролов плееров/тулбаров (раньше дублировались по компонентам). ---
+// size — сторона в px (оригиналы задавали width/height явно, разные по месту), дефолт 20.
+
+// Развернуть / свернуть (углы наружу / внутрь). Используется в тулбаре звонка и видеоплеере.
+export function FullscreenIcon({ active, size = 20, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      {active ? (
+        <>
+          <path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+        </>
+      ) : (
+        <>
+          <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+// Скачать (стрелка вниз в лоток). Видеоплеер, лайтбокс.
+export function DownloadIcon({ size = 20, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  )
+}
+
+// Галочка — «скопировано / выбрано».
+export function CheckIcon({ size = 20, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  )
+}
+
+// Лист файла — вложение/скачивание.
+export function FileIcon({ size = 20, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+    </svg>
+  )
+}

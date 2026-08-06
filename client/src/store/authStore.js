@@ -128,7 +128,13 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
-    await api.post('/api/auth/logout') // бэк стирает cookie
+    // Даже если запрос упал (нет сети / токен уже протух → 401) — всё равно выходим локально,
+    // иначе юзер «залипнет» залогиненным в UI. Ошибку глотаем осознанно (H1).
+    try {
+      await api.post('/api/auth/logout') // бэк стирает cookie
+    } catch {
+      /* сеть/401 — выходим локально в любом случае */
+    }
     set({ user: null })
   },
 }))
