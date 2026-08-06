@@ -22,6 +22,9 @@ export const Secret = sequelize.define('Secret', {
     type: DataTypes.DATE,
     allowNull: true, // срок жизни; null = бессрочно
   },
+}, {
+  // Индекс под будущую cron-чистку протухших секретов: WHERE expiresAt < now (см. S3).
+  indexes: [{ fields: ['expiresAt'] }],
 });
 // salt/hasPassword убраны: пароля больше нет, ключ целиком в URL (см. utils/crypto.js).
 // burnAfterRead убран: секрет ВСЕГДА сгорает после первого прочтения (см. consumeSecret).

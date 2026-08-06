@@ -78,29 +78,17 @@ export function initSocket(server) {
     }
   });
 
-  // Собрать список участников комнаты и разослать его ВСЕЙ комнате.
-  // Источник правды — сами комнаты socket.io: спрашиваем, какие сокеты сейчас в code.
-  // excludeId — сокет, которого надо исключить (при disconnecting он ещё числится в комнате).
-  async function broadcastPresence(code, excludeId = null) {
+  // Считает уникальных участников комнаты (дедуп по userId — две вкладки = один человек),
+  // исключая excludeId (уходящий сокет при disconnecting ещё числится в комнате). Нужен, чтобы
+  // решить, не опустела ли комната. Список участников клиентам НЕ рассылаем: панель участников
+  // живёт на составе из LiveKit, socket-presence на клиенте не использовался (RO1).
+  async function countUniqueUsers(code, excludeId = null) {
     const sockets = await io.in(code).fetchSockets();
-
-    // Дедуп по userId: у юзера может быть несколько вкладок — в списке он один раз.
-    const byUser = new Map();
+    const byUser = new Set();
     for (const s of sockets) {
       if (s.id === excludeId) continue; // уходящий сокет не считаем
-      byUser.set(s.data.userId, {
-        userId: s.data.userId,
-        displayName: s.data.displayName,
-      });
+      byUser.add(s.data.userId);
     }
-
-    io.to(code).emit('presence:update', {
-      code,
-      participants: [...byUser.values()],
-    });
-
-    // Возвращаем число оставшихся УНИКАЛЬНЫХ участников — вызывающий (disconnecting)
-    // по нему решает, не пора ли планировать удаление опустевшей комнаты.
     return byUser.size;
   }
 
@@ -158,7 +146,6 @@ export function initSocket(server) {
 
       socket.join(code); // добавиться в комнату
       cancelRoomCleanup(code); // кто-то вошёл — отменяем отложенное удаление, если было
-      await broadcastPresence(code); // разослать обновлённый состав всем в комнате
 
       // История чата — ТОЛЬКО этому сокету и ТОЛЬКО после реального входа в комнату.
       // Так историю нельзя вытащить, не подключившись (раньше был публичный REST /messages,
@@ -270,9 +257,9 @@ export function initSocket(server) {
       // socket.rooms содержит и личную комнату сокета (== socket.id) — её пропускаем.
       for (const code of socket.rooms) {
         if (code === socket.id) continue;
-        // Пересчитываем состав БЕЗ уходящего сокета и шлём оставшимся. Если не осталось
-        // никого — планируем удаление комнаты (с грейс-периодом, см. scheduleRoomCleanup).
-        broadcastPresence(code, socket.id).then((remaining) => {
+        // Считаем оставшихся БЕЗ уходящего сокета. Если никого — планируем удаление комнаты
+        // (с грейс-периодом, см. scheduleRoomCleanup).
+        countUniqueUsers(code, socket.id).then((remaining) => {
           if (remaining === 0) scheduleRoomCleanup(code);
         });
       }

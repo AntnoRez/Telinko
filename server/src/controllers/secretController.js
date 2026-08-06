@@ -31,7 +31,7 @@ export async function createSecret(req, res) {
     if (ciphertext.length > MAX_CIPHERTEXT) {
       return res.status(413).json({ error: 'Секрет слишком большой' });
     }
-    if (!iv) {
+    if (typeof iv !== 'string' || !iv) {
       return res.status(400).json({ error: 'Некорректные данные шифрования' });
     }
 

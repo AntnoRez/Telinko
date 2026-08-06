@@ -19,7 +19,7 @@ const createLimiter = rateLimit({
 });
 
 router.post('/', createLimiter, createSecret); // создать секрет → { id }
-router.get('/:id/meta', getMeta); // метаданные { exists, hasPassword } — НЕ сжигает
-router.post('/:id', consumeSecret); // забрать шифроблоб — сжигает, если burnAfterRead
+router.get('/:id/meta', getMeta); // метаданные { exists } — НЕ сжигает
+router.post('/:id', consumeSecret); // забрать шифроблоб — ВСЕГДА сжигает (секрет одноразовый)
 
 export default router;

@@ -127,29 +127,35 @@ export async function githubCallback(req, res) {
     }
     email = email ? email.toLowerCase() : null;
 
-    // 4. find-or-create по githubId. С email-аккаунтами НЕ сливаем (решение по плану).
+    // 4. find-or-create по githubId. GitHub-аккаунт ВСЕГДА отдельный: боевой (unique) email не
+    //    занимаем — email из GitHub кладём в githubEmail (только для отображения, не unique).
+    //    Так вход по паролю его не заденет, а один человек может иметь и почтовый, и GitHub-аккаунт
+    //    с одним адресом; и login никогда не встретит беспарольный аккаунт с email. См. A2/A5.
     let user = await User.findOne({ where: { githubId } });
     if (!user) {
-      // email проставляем, только если он свободен — иначе оставляем null, чтобы не задеть
-      // чужой email-аккаунт (уникальный индекс + отказ от слияния).
-      let emailToSet = email;
-      if (emailToSet) {
-        const clash = await User.findOne({ where: { email: emailToSet } });
-        if (clash) emailToSet = null;
-      }
       let displayName =
         (typeof gh.name === 'string' && gh.name.trim()) ||
         (typeof gh.login === 'string' && gh.login) ||
         'GitHub user';
       displayName = displayName.slice(0, 50);
 
-      user = await User.create({
-        githubId,
-        email: emailToSet,
-        displayName,
-        guest: false, // реальный аккаунт → может стать организатором
-        temporary: false,
-      });
+      try {
+        user = await User.create({
+          githubId,
+          email: null, // боевой email НЕ занимаем (A5)
+          githubEmail: email, // только для отображения
+          displayName,
+          guest: false, // реальный аккаунт → может стать организатором
+          temporary: false,
+        });
+      } catch (err) {
+        // Гонка (G1): параллельный callback с тем же githubId успел создать юзера → unique-индекс
+        // не даст второй. Перечитываем и используем существующего вместо падения в 500.
+        if (err.name === 'SequelizeUniqueConstraintError') {
+          user = await User.findOne({ where: { githubId } });
+        }
+        if (!user) throw err;
+      }
     }
 
     // 5. ставим нашу сессионную cookie (та же, что у остального логина) и рапортуем успех.

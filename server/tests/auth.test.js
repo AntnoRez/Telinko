@@ -4,6 +4,7 @@ import request from 'supertest';
 
 import app from '../src/app.js';
 import { sequelize } from '../src/config/db.js';
+import { User } from '../src/models/index.js';
 
 // Данные валидного юзера, которыми пользуемся в тестах.
 const validUser = {
@@ -70,6 +71,17 @@ describe('POST /api/auth/login', () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({ email: validUser.email, password: 'wrong-password' });
+
+    assert.equal(res.status, 401);
+  });
+
+  test('аккаунт с email, но без пароля → 401, а не 500 (A2)', async () => {
+    // Беспарольный аккаунт (стиль GitHub-входа). login НЕ должен падать в 500 на
+    // bcrypt.compare(pw, null) и НЕ должен выдавать этот email кодом ответа — единый 401.
+    await User.create({ email: 'nopass@mail.ru', passwordHash: null, displayName: 'NoPass' });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'nopass@mail.ru', password: 'whatever' });
 
     assert.equal(res.status, 401);
   });

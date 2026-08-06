@@ -13,6 +13,13 @@ const PORT = process.env.PORT || 4000;
 // Без валидного CHAT_ENC_KEY чат нельзя шифровать — падаем сразу, а не пишем плейнтекст в БД.
 assertChatKey();
 
+// Без JWT_SECRET авторизация молча сломается (verifyToken/ signToken упадут на первом же запросе,
+// а не на старте). Падаем громко здесь, симметрично assertChatKey (U2).
+if (!process.env.JWT_SECRET) {
+  console.error('JWT_SECRET не задан — авторизация работать не будет. Заполни server/.env');
+  process.exit(1);
+}
+
 // Создаём http-сервер вручную из Express-приложения.
 // Раньше это делал app.listen неявно; теперь нам нужен сам сервер,
 // чтобы прицепить к нему socket.io (он работает поверх того же http-сервера).

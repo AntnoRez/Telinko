@@ -50,4 +50,21 @@ app.use('/api/rooms', roomRoutes);
 // Роуты секретных ссылок: префикс /api/secrets (публичные)
 app.use('/api/secrets', secretRoutes);
 
+// Неизвестный путь — отдаём JSON 404 (а не дефолтную HTML-страницу Express).
+app.use((req, res) => {
+  res.status(404).json({ error: 'Не найдено' });
+});
+
+// Глобальный обработчик ошибок (4 аргумента — Express распознаёт его как error-handler).
+// Главный кейс: битый JSON в теле (express.json бросает) — без этого клиент получил бы HTML-500
+// вместо JSON. Детали ошибки остаются в логе, наружу — генерик (AP1).
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Некорректный JSON в теле запроса' });
+  }
+  console.error('unhandled error:', err.message);
+  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+});
+
 export default app;

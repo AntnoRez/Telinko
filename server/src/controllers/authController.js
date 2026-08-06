@@ -88,6 +88,11 @@ export async function register(req, res) {
     res.cookie(COOKIE_NAME, token, cookieOptions); // кладём токен в httpOnly cookie
     res.status(201).json({ user: publicUser(user) });
   } catch (err) {
+    // Гонка: два запроса с одним email проскочили findOne выше, вставить смог только один —
+    // второму unique-индекс не даст. Отдаём честный 409, а не 500 (как в createRoom).
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'Пользователь с таким email уже есть' });
+    }
     // Сюда попадает только неожиданное (валидацию мы уже прошли выше).
     // Наружу — генерик: err.message может содержать детали БД, клиенту они не положены.
     console.error('register error:', err);
@@ -182,14 +187,16 @@ export async function login(req, res) {
 
     const user = await User.findOne({ where: { email } });
 
-    // bcrypt.compare выполняем ВСЕГДА, даже если юзера нет (тогда — с фиктивным хешем).
-    // Иначе ответ «нет такого email» приходил бы заметно быстрее (~на 100 мс, без bcrypt),
-    // и по таймингу можно было бы перебирать, какие email зарегистрированы.
-    const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+    // bcrypt.compare выполняем ВСЕГДА — даже если юзера нет ИЛИ у него нет пароля (аккаунт через
+    // GitHub / гость): сравниваем с фиктивным хешем. Иначе ответ приходил бы заметно быстрее
+    // (без bcrypt) и по таймингу/коду можно было бы перебирать, какие email существуют.
+    // Важно: bcrypt.compare(password, null) БРОСИЛ БЫ исключение → 500 → утечка «этот email есть,
+    // но без пароля». Поэтому при отсутствии passwordHash берём DUMMY_HASH и ниже отдаём тот же 401.
+    const ok = await bcrypt.compare(password, user?.passwordHash || DUMMY_HASH);
 
-    // Специально НЕ говорим, что именно неверно (email или пароль) —
-    // иначе подскажем злоумышленнику, какие email существуют.
-    if (!user || !ok) {
+    // Единый ответ: нет юзера / у юзера нет пароля / пароль неверный — всё это 401 без деталей,
+    // чтобы не раскрывать, какие email зарегистрированы и каким способом.
+    if (!user || !user.passwordHash || !ok) {
       return res.status(401).json({ error: 'Неверный email или пароль' });
     }
 

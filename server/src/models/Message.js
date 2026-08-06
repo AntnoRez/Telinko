@@ -38,5 +38,9 @@ export const Message = sequelize.define('Message', {
     type: DataTypes.INTEGER,
     allowNull: true, // размер в байтах (для подписи)
   },
+}, {
+  // Индекс под горячий запрос истории чата: WHERE roomId ... ORDER BY createdAt (на каждый join
+  // и реконнект, см. socket/index.js). Без него — seq scan при росте таблицы.
+  indexes: [{ fields: ['roomId'] }],
 });
 // id, createdAt, updatedAt Sequelize добавит сам. createdAt = время отправки.

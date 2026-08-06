@@ -26,6 +26,12 @@ export const User = sequelize.define('User', {
     unique: true, // один GitHub-аккаунт = один наш аккаунт. В Postgres несколько NULL в unique
     // разрешены → обычные email-аккаунты и гости (githubId=null) не конфликтуют.
   },
+  githubEmail: {
+    type: DataTypes.STRING,
+    allowNull: true, // email из GitHub — ТОЛЬКО для отображения в профиле. НЕ unique (в отличие от
+    // email): GitHub-аккаунт намеренно не занимает боевой email, поэтому вход по паролю его не
+    // затронет, а один человек может завести и почтовый, и GitHub-аккаунт с одним email. См. A2/A5.
+  },
   displayName: {
     type: DataTypes.STRING,
     allowNull: false, // имя для отображения в чатах/звонках — есть у всех, включая гостей

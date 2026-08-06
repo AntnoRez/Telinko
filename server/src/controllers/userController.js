@@ -101,6 +101,9 @@ export async function getAvatar(req, res) {
       console.error('avatar stream error:', e.message);
       res.destroy();
     });
+    // Клиент оборвал (закрыл вкладку / сменил src) → гасим поток из MinIO, иначе соединение из пула
+    // висит до таймаута (AT1). destroy() на уже дочитанном потоке безопасен (no-op).
+    res.on('close', () => obj.Body.destroy());
     obj.Body.pipe(res);
   } catch (err) {
     if (err?.$metadata?.httpStatusCode === 404 || err?.name === 'NoSuchKey') {

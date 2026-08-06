@@ -98,16 +98,23 @@ export async function claimOrganizer(req, res) {
       return res.status(403).json({ error: 'Гость не может стать организатором. Войдите в аккаунт.' });
     }
 
+    // Атомарный захват: назначаем организатора ТОЛЬКО если его ещё нет (organizerId IS NULL).
+    // Так два одновременных claim не «перетирают» друг друга read-modify-write'ом — БД пропустит
+    // ровно один UPDATE (первый), остальные вернут 0 изменённых строк.
+    const [affected] = await Room.update(
+      { organizerId: req.user.id, startedAt: new Date() }, // startedAt — точка отсчёта таймера
+      { where: { code: req.params.code, organizerId: null } }
+    );
+
+    // Перечитываем актуальное состояние: нужно и для 404, и чтобы отдать текущего организатора.
     const room = await Room.findOne({ where: { code: req.params.code } });
     if (!room) {
       return res.status(404).json({ error: 'Комната не найдена' });
     }
 
-    if (room.organizerId === null) {
-      room.organizerId = req.user.id;
-      room.startedAt = new Date(); // старт звонка — точка отсчёта таймера длительности
-      await room.save();
-      // Пускаем ждавших: у кого открыт экран ожидания — по этому событию запросят токен и войдут.
+    if (affected === 1) {
+      // Организатором стали именно мы (первые) → звонок стартовал. Пускаем ждавших: у кого открыт
+      // экран ожидания — по этому событию запросят токен и войдут. Повторные claim сюда не попадают.
       getIO()?.to(room.code).emit('call:started', { code: room.code });
     }
 

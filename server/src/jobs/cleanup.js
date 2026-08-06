@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { User, Room } from '../models/index.js';
+import { User, Room, Secret } from '../models/index.js';
 import { getIO } from '../socket/index.js';
 import { purgeRoom } from '../utils/roomCleanup.js';
 
@@ -67,10 +67,23 @@ async function cleanupOrphanRooms() {
   }
 }
 
-// Один прогон чистки: temp-аккаунты + комнаты-сироты.
+// Удаляет протухшие секреты, которые никто не открыл. Штатно секрет удаляется при обращении
+// (getMeta/consume), но неоткрытую ссылку никто не тронет → без этого прохода она висела бы в БД
+// вечно (S3). Бессрочные (expiresAt = null) под Op.lt не попадают — их не трогаем.
+async function cleanupExpiredSecrets() {
+  try {
+    const deleted = await Secret.destroy({ where: { expiresAt: { [Op.lt]: new Date() } } });
+    if (deleted) console.log(`cleanup: удалено протухших секретов: ${deleted}`);
+  } catch (err) {
+    console.error('secret cleanup error:', err.message);
+  }
+}
+
+// Один прогон чистки: temp-аккаунты + комнаты-сироты + протухшие секреты.
 async function runCleanup() {
   await cleanupTempUsers();
   await cleanupOrphanRooms();
+  await cleanupExpiredSecrets();
 }
 
 // Запускаем периодическую чистку. Без внешних зависимостей — обычный setInterval.
