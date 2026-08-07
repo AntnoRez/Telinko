@@ -17,7 +17,7 @@ const CUSTOM_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/;
 // ВАЖНО: заводишь новый топ-левел путь (/pricing и т.п.) — допиши его сюда.
 const RESERVED_CODES = new Set([
   // существующие пути/ассеты/прокси
-  'api', 'assets', 'oauth', 'secret', 'room', 'favicon.svg', 'favicon.ico', 'robots.txt',
+  'api', 'assets', 'oauth', 'secret', 'keygen', 'room', 'favicon.svg', 'favicon.ico', 'robots.txt',
   // зарезервировано под будущие страницы
   'login', 'register', 'home', 'about', 'help', 'settings', 'admin', 'terms', 'privacy',
 ]);

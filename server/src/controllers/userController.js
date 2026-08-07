@@ -77,15 +77,37 @@ export async function removeAvatar(req, res) {
   }
 }
 
+// XML-экранирование инициала (имя может содержать <, &, " и т.п.). В <img> браузер SVG-скрипты
+// не исполняет, но экранируем на всякий случай.
+function escapeXml(s) {
+  return s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// SVG-заглушка аватара: инициал на sky→blue градиенте (совпадает с клиентским кружком). Отдаём
+// её вместо 404, когда аватар не загружен, — чтобы <img> всегда получал картинку и в консоли не
+// сыпались 404 у каждого юзера без аватара.
+function letterAvatarSvg(name) {
+  const initial = escapeXml(((name || '').trim()[0] || '?').toUpperCase());
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><rect width="128" height="128" fill="url(#g)"/><text x="64" y="64" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="60" font-weight="600" fill="#fff" text-anchor="middle" dominant-baseline="central">${initial}</text></svg>`;
+}
+
 // GET /api/users/:id/avatar — раздать аватар из приватного MinIO. requireAuth (аватары видят
-// только вошедшие — участники звонка/чата). Нет аватара → 404, клиент рисует кружок с буквой.
+// только вошедшие — участники звонка/чата). Нет аватара → SVG-заглушка с буквой (не 404).
 export async function getAvatar(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
     if (!Number.isInteger(id)) return res.status(404).end();
 
-    const user = await User.findByPk(id, { attributes: ['id', 'avatarKey'] });
-    if (!user || !user.avatarKey) return res.status(404).end();
+    const user = await User.findByPk(id, { attributes: ['id', 'avatarKey', 'displayName'] });
+    if (!user || !user.avatarKey) {
+      // Нет загруженного аватара → отдаём SVG-кружок с буквой (200 вместо 404). CORP cross-origin —
+      // как и у настоящего аватара ниже, чтобы картинка грузилась и в dev с другого порта.
+      res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      return res.send(letterAvatarSvg(user?.displayName));
+    }
 
     const obj = await getObject(user.avatarKey);
     res.setHeader('Content-Type', obj.ContentType || 'image/jpeg');
