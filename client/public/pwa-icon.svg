@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <!-- Полный тёмный фон (без прозрачных углов) — для maskable safe-zone. -->
+  <rect width="512" height="512" fill="#0a0a0a"/>
+  <!-- Логотип «V» + play, центрирован (исходный viewBox 256×200), sky→blue. Масштаб ~1.4 держит
+       фигуру в пределах safe-zone (центральные ~80%), чтобы Android не обрезал лого. -->
+  <g transform="translate(77,116) scale(1.4)">
+    <path fill="url(#g)" d="M36 24 Q36 12 48 12 H90 Q98 12 102 20 L128 72 L154 20 Q158 12 166 12 H208 Q220 12 220 24 Q220 28 218 32 L158 154 Q152 166 138 166 H118 Q104 166 98 154 L38 32 Q36 28 36 24 Z"/>
+    <path d="M118 166 L128 72 L138 166 Z" fill="#1E40AF" opacity=".28"/>
+    <path fill="url(#g)" d="M248 74 Q248 66 240 66 L208 92 Q202 97 202 100 Q202 103 208 108 L240 134 Q248 134 248 126 Z"/>
+  </g>
+</svg>

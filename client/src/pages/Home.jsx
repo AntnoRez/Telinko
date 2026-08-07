@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar'
 import ProfileModal from '../components/ProfileModal'
 import LoginModal from '../components/LoginModal'
 import GlowBackground from '../components/GlowBackground'
-import { VideoIcon, LockIcon, TelinkoLogo } from '../components/icons'
+import { VideoIcon, LockIcon, KeyIcon, TelinkoLogo } from '../components/icons'
 import { isReserved } from '../utils/room'
 
 // Формат кастомного имени комнаты — совпадает с серверным CUSTOM_CODE_RE.
@@ -99,7 +99,7 @@ function Home() {
         <header className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-5">
           <span className="-ml-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight sm:-ml-2">
             <TelinkoLogo className="h-10 w-10" />
-            <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-sky-400 to-blue-400 bg-clip-text text-transparent">
               Telinko
             </span>
           </span>
@@ -120,7 +120,7 @@ function Home() {
           ) : (
             <button
               onClick={() => setShowLogin(true)}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500"
             >
               Войти
             </button>
@@ -131,7 +131,7 @@ function Home() {
           {/* Hero */}
           <div className="mb-10 text-center sm:mb-14">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-              <span className="bg-gradient-to-r from-indigo-300 via-violet-300 to-indigo-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-sky-300 bg-clip-text text-transparent">
                 Видеоконференции
               </span>
             </h1>
@@ -144,7 +144,7 @@ function Home() {
             {/* Видеозвонки: создать комнату (вход в комнату — только по ссылке). */}
             <section className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm">
               <div className="mb-5 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300 ring-1 ring-inset ring-indigo-500/20">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-500/10 text-sky-300 ring-1 ring-inset ring-sky-500/20">
                   <VideoIcon className="w-6 h-6" />
                 </div>
                 <div>
@@ -160,12 +160,12 @@ function Home() {
                   value={roomName}
                   onChange={(e) => { setRoomName(e.target.value); setCreateError(null) }}
                   maxLength={64}
-                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800/80 px-3 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800/80 px-3 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500"
                 />
                 <button
                   onClick={startCreate}
                   disabled={busy}
-                  className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                  className="rounded-lg bg-sky-600 px-5 py-2.5 font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
                 >
                   Создать
                 </button>
@@ -178,13 +178,30 @@ function Home() {
               to="/secret"
               className="group flex items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm transition hover:border-neutral-700 hover:bg-neutral-900"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 ring-1 ring-inset ring-violet-500/20">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-300 ring-1 ring-inset ring-blue-500/20">
                 <LockIcon className="w-6 h-6" />
               </div>
               <div className="min-w-0">
                 <div className="font-semibold">Секретная ссылка</div>
                 <p className="mt-1 text-sm text-gray-400">
                   Одноразовое зашифрованное сообщение
+                </p>
+              </div>
+              <span className="ml-auto shrink-0 text-lg text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-gray-300">→</span>
+            </Link>
+
+            {/* Генератор ключей. */}
+            <Link
+              to="/keygen"
+              className="group flex items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm transition hover:border-neutral-700 hover:bg-neutral-900"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300 ring-1 ring-inset ring-cyan-500/20">
+                <KeyIcon className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold">Генератор ключей</div>
+                <p className="mt-1 text-sm text-gray-400">
+                  Случайные ключи и пароли — в браузере
                 </p>
               </div>
               <span className="ml-auto shrink-0 text-lg text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-gray-300">→</span>

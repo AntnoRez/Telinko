@@ -32,7 +32,7 @@ import VolumeControl from './VolumeControl'
 import ConnectionInfo from './ConnectionInfo'
 import { RttProvider } from './RttContext'
 import Avatar from './Avatar'
-import { LockIcon, FullscreenIcon, CheckIcon } from './icons'
+import { LockIcon, KeyIcon, FullscreenIcon, CheckIcon } from './icons'
 
 // Стабильный на вкладку идентификатор устройства. Живёт в sessionStorage: переживает
 // перезагрузку страницы, но у каждой вкладки/устройства свой. Нужен, чтобы в один
@@ -463,7 +463,7 @@ function AdaptiveToolbar({ pinnedStart, items, menuItems, leaveButton }) {
 // Тулбар — единая нижняя панель (как в Jitsi): кнопки LiveKit (mic/cam/демка/положить трубку)
 // + чат/участники/пригласить/секретка/фуллскрин. Панели чата и участников рендерит родитель
 // (Room), сюда приходят колбэки onToggleChat/onToggleParticipants.
-function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onToggleParticipants, onOpenSecret, inviteUrl, onLiveParticipants, startedAt }) {
+function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onToggleParticipants, onOpenSecret, onOpenKeyGen, inviteUrl, onLiveParticipants, startedAt }) {
   // Видеотреки: камеры (с плейсхолдером, если камера выключена) + демонстрация экрана.
   const tracks = useTracks([
     { source: Track.Source.Camera, withPlaceholder: true },
@@ -596,7 +596,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
           icon={<ScreenShareIcon />}
           titleOn="Остановить показ экрана"
           titleOff="Показать экран"
-          color={(on) => (on ? 'text-indigo-400' : 'text-white')}
+          color={(on) => (on ? 'text-sky-400' : 'text-white')}
         />
       ),
     },
@@ -641,6 +641,12 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
       icon: <LockIcon className="w-5 h-5" />,
       onClick: onOpenSecret,
     },
+    {
+      key: 'keygen',
+      label: 'Генератор ключей',
+      icon: <KeyIcon className="w-5 h-5" />,
+      onClick: onOpenKeyGen,
+    },
   ]
 
   // Выход из звонка — красная кнопка, закреплена справа (после «⋮»). Disconnect → onDisconnected → onLeave.
@@ -668,7 +674,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
               else await localParticipant.setMicrophoneEnabled(true)
               setAskUnmute(null)
             }}
-            className="rounded bg-indigo-600 px-3 py-1 font-medium hover:bg-indigo-500"
+            className="rounded bg-sky-600 px-3 py-1 font-medium hover:bg-sky-500"
           >
             Включить
           </button>
@@ -732,7 +738,7 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
 // Фуллскрин теперь владеет Room (разворачивается ВСЯ сцена звонка — с чатом и участниками,
 // иначе выехавшие панели оставались бы вне фуллскрин-элемента). Сюда фуллскрин приходит готовым:
 // onToggleFullscreen — переключатель, isFullscreen — текущее состояние (для иконки/лейбла тулбара).
-function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat, onToggleParticipants, onOpenSecret, inviteUrl, onLiveParticipants, onToggleFullscreen, isFullscreen }) {
+function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat, onToggleParticipants, onOpenSecret, onOpenKeyGen, inviteUrl, onLiveParticipants, onToggleFullscreen, isFullscreen }) {
   const [token, setToken] = useState(null)
   const [url, setUrl] = useState(null)
   const [status, setStatus] = useState('loading') // loading | ready | error
@@ -787,6 +793,7 @@ function VideoCall({ code, mediaPrefs, startedAt, onLeave, unread, onToggleChat,
             onToggleChat={onToggleChat}
             onToggleParticipants={onToggleParticipants}
             onOpenSecret={onOpenSecret}
+            onOpenKeyGen={onOpenKeyGen}
             inviteUrl={inviteUrl}
             onLiveParticipants={onLiveParticipants}
           />

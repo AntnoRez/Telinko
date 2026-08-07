@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import SecretCreateForm from './SecretCreateForm'
-import { LockIcon, FileIcon } from './icons'
+import KeyGenForm from './KeyGenForm'
+import { LockIcon, KeyIcon, FileIcon } from './icons'
 
 // Иконки меню вложений (монохром, наследуют currentColor).
 function PaperclipIcon() {
@@ -23,7 +24,8 @@ function ImageIcon() {
 // onPickFile (Room → MinIO).
 function ChatAttachMenu({ onSecretLink, onPickFile }) {
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState('menu') // 'menu' | 'secret'
+  const [view, setView] = useState('menu') // 'menu' | 'secret' | 'keygen'
+  const [prefill, setPrefill] = useState('') // ключ из генератора → предзаполнение секретки
   const ref = useRef(null)
   const mediaInputRef = useRef(null) // фото/видео
   const fileInputRef = useRef(null) // любой файл
@@ -31,6 +33,7 @@ function ChatAttachMenu({ onSecretLink, onPickFile }) {
   function close() {
     setOpen(false)
     setView('menu')
+    setPrefill('')
   }
 
   // Выбрали файл в скрытом input → отдаём наверх (Room загрузит), меню закрываем.
@@ -71,8 +74,8 @@ function ChatAttachMenu({ onSecretLink, onPickFile }) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-lg border border-neutral-800 bg-neutral-900 p-2 shadow-xl">
-          {view === 'menu' ? (
+        <div className={`absolute bottom-full left-0 z-50 mb-2 rounded-lg border border-neutral-800 bg-neutral-900 p-2 shadow-xl ${view === 'menu' ? 'w-64' : 'dark-scroll w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto'}`}>
+          {view === 'menu' && (
             <div className="flex flex-col gap-0.5">
               {/* label ↔ input (htmlFor): нативно открывает пикер и надёжно отдаёт файл на iOS,
                   в отличие от программного .click() по скрытому инпуту. */}
@@ -88,22 +91,42 @@ function ChatAttachMenu({ onSecretLink, onPickFile }) {
                 <LockIcon className="h-[18px] w-[18px]" />
                 <span className="flex-1">Секретная ссылка</span>
               </button>
+              <button type="button" onClick={() => setView('keygen')} className={rowActive}>
+                <KeyIcon className="h-[18px] w-[18px]" />
+                <span className="flex-1">Генератор ключей</span>
+              </button>
             </div>
-          ) : (
+          )}
+
+          {view === 'secret' && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-100">Секретная ссылка</span>
-                <button type="button" onClick={() => setView('menu')} className="text-xs text-gray-500 hover:text-gray-200">
+                <button type="button" onClick={() => { setView('menu'); setPrefill('') }} className="text-xs text-gray-500 hover:text-gray-200">
                   ← назад
                 </button>
               </div>
               <SecretCreateForm
                 dark
+                initialText={prefill}
                 onCreated={(url) => {
                   onSecretLink(url)
                   close()
                 }}
               />
+            </div>
+          )}
+
+          {view === 'keygen' && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-100">Генератор ключей</span>
+                <button type="button" onClick={() => setView('menu')} className="text-xs text-gray-500 hover:text-gray-200">
+                  ← назад
+                </button>
+              </div>
+              {/* «Через секретку» открывает форму секретки прямо тут (переход во view secret с ключом). */}
+              <KeyGenForm onSendToSecret={(v) => { setPrefill(v); setView('secret') }} />
             </div>
           )}
         </div>

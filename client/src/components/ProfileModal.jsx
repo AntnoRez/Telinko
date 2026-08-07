@@ -85,7 +85,7 @@ export default function ProfileModal({ onClose }) {
           <div className="flex items-center gap-2">
             {/* Нативный label ↔ input: на iOS надёжнее программного .click() по скрытому инпуту. */}
             <label
-              className={`cursor-pointer rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 ${avatarBusy ? 'pointer-events-none opacity-50' : ''}`}
+              className={`cursor-pointer rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-sky-500 ${avatarBusy ? 'pointer-events-none opacity-50' : ''}`}
             >
               {avatarBusy ? 'Загрузка…' : hasAvatar ? 'Сменить фото' : 'Загрузить фото'}
               <input type="file" accept="image/*" className="sr-only" onChange={onPickFile} />
@@ -111,13 +111,13 @@ export default function ProfileModal({ onClose }) {
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSaveName()}
             maxLength={50}
-            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           <button
             type="button"
             onClick={onSaveName}
             disabled={!nameChanged || savingName}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
           >
             {savingName ? '…' : saved ? '✓' : 'Сохранить'}
           </button>

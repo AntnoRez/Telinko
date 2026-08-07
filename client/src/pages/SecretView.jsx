@@ -76,7 +76,7 @@ function SecretView() {
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-neutral-950 text-gray-100">
-      <GlowBackground variant="violet" />
+      <GlowBackground variant="blue" />
 
       <div className="relative">
         <header className="mx-auto flex max-w-lg items-center px-4 sm:px-6 py-4">
@@ -115,7 +115,7 @@ function SecretView() {
                 </div>
                 <button
                   onClick={() => copyText(secretText)}
-                  className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+                  className="self-start rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500"
                 >
                   {copied ? 'Скопировано!' : 'Копировать'}
                 </button>

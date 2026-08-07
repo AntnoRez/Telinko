@@ -21,8 +21,8 @@ const TTL_OPTIONS = [
 // и в модалке внутри звонка (тёмная). Тему переключает проп dark, чтобы не ломать /secret.
 // onCreated(url) (опц.): если задан — вместо блока «ссылка готова» отдаём ссылку наверх
 // (в чате вставляем её в поле сообщения) и не показываем результат внутри формы.
-function SecretCreateForm({ dark = false, onCreated }) {
-  const [text, setText] = useState('')
+function SecretCreateForm({ dark = false, onCreated, initialText = '' }) {
+  const [text, setText] = useState(initialText)
   const [ttlIndex, setTtlIndex] = useState(TTL_OPTIONS.length - 1) // дефолт «Бессрочно»
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -73,7 +73,7 @@ function SecretCreateForm({ dark = false, onCreated }) {
 
   // Классы, зависящие от темы. Синие кнопки одинаковы в обеих темах — их не трогаем.
   const field = dark
-    ? 'border border-neutral-700 bg-neutral-800 text-gray-100 placeholder-gray-500 focus:ring-indigo-500'
+    ? 'border border-neutral-700 bg-neutral-800 text-gray-100 placeholder-gray-500 focus:ring-sky-500'
     : 'border border-gray-300 focus:ring-blue-400'
   const labelCls = dark ? 'text-gray-300' : 'text-gray-700'
   const muted = dark ? 'text-gray-400' : 'text-gray-500'
@@ -133,7 +133,7 @@ function SecretCreateForm({ dark = false, onCreated }) {
           />
           <button
             onClick={() => copyUrl(resultUrl)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
           >
             {copied ? 'Скопировано!' : 'Копировать'}
           </button>
@@ -197,7 +197,7 @@ function SecretCreateForm({ dark = false, onCreated }) {
                   onClick={() => { setTtlIndex(i); setTtlOpen(false) }}
                   className={`block w-full px-3 py-1.5 text-left ${
                     i === ttlIndex
-                      ? 'font-medium text-indigo-400'
+                      ? 'font-medium text-sky-400'
                       : dark ? 'text-gray-200' : 'text-gray-700'
                   } ${dark ? 'hover:bg-neutral-700' : 'hover:bg-gray-100'}`}
                 >
@@ -214,7 +214,7 @@ function SecretCreateForm({ dark = false, onCreated }) {
       <button
         type="submit"
         disabled={submitting || !text.trim()}
-        className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+        className="rounded-lg bg-sky-600 px-4 py-2 font-medium text-white hover:bg-sky-500 disabled:opacity-50"
       >
         {submitting ? 'Шифруем…' : 'Создать ссылку'}
       </button>

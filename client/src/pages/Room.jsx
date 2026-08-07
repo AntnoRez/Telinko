@@ -5,6 +5,7 @@ import { socket } from '../api/socket'
 import { useAuthStore } from '../store/authStore'
 import VideoCall from '../components/VideoCall'
 import SecretCreateForm from '../components/SecretCreateForm'
+import KeyGenForm from '../components/KeyGenForm'
 import Prejoin from './Prejoin'
 import CopyLinkButton from '../components/CopyLinkButton'
 import ChatAttachMenu from '../components/ChatAttachMenu'
@@ -35,7 +36,7 @@ function renderMessageText(text, mine) {
         href={part}
         target="_blank"
         rel="noopener noreferrer"
-        className={`underline underline-offset-2 break-all ${mine ? 'text-indigo-100 hover:text-white' : 'text-indigo-300 hover:text-indigo-200'}`}
+        className={`underline underline-offset-2 break-all ${mine ? 'text-sky-100 hover:text-white' : 'text-sky-300 hover:text-sky-200'}`}
       >
         {part}
       </a>
@@ -155,6 +156,8 @@ function Room() {
   const [attachErr, setAttachErr] = useState(null)
   const [dragActive, setDragActive] = useState(false) // тащат файл над панелью чата
   const [showSecret, setShowSecret] = useState(false) // модалка создания секретки
+  const [showKeyGen, setShowKeyGen] = useState(false) // модалка генератора ключей
+  const [secretPrefill, setSecretPrefill] = useState('') // предзаполнение секретки (ключ из генератора)
   const [showOrgLogin, setShowOrgLogin] = useState(false) // модалка «стать организатором»
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState(null)
@@ -534,7 +537,7 @@ function Room() {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center gap-4 bg-neutral-950 text-gray-100">
         <p className="text-lg">{notFoundMsg}</p>
-        <button onClick={() => navigate('/')} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500">
+        <button onClick={() => navigate('/')} className="rounded-lg bg-sky-600 px-4 py-2 font-medium text-white transition hover:bg-sky-500">
           На главную
         </button>
       </div>
@@ -550,7 +553,7 @@ function Room() {
           <h1 className="text-2xl sm:text-3xl font-semibold">Просьба присоединиться к встрече…</h1>
           <p className="mt-1 text-gray-400 truncate max-w-xs sm:max-w-md mx-auto">{roomName}</p>
         </div>
-        <div className="relative h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-indigo-400" />
+        <div className="relative h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-sky-400" />
         <p className="relative max-w-md text-gray-300">
           Звонок ещё не начался, потому что не пришёл организатор. Хотите стать организатором —
           войдите. Иначе просто подождите.
@@ -558,7 +561,7 @@ function Room() {
         <button
           onClick={handleClaimClick}
           disabled={claiming}
-          className="relative rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          className="relative rounded-lg bg-sky-600 px-6 py-3 font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
         >
           {claiming ? 'Запускаем…' : 'Я организатор'}
         </button>
@@ -601,8 +604,8 @@ function Room() {
             onDrop={onChatDrop}
           >
             {dragActive && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-indigo-500 bg-neutral-900/85 pointer-events-none">
-                <span className="text-sm font-medium text-indigo-300">Отпустите файл, чтобы прикрепить</span>
+              <div className="absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-sky-500 bg-neutral-900/85 pointer-events-none">
+                <span className="text-sm font-medium text-sky-300">Отпустите файл, чтобы прикрепить</span>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800 shrink-0">
@@ -623,7 +626,7 @@ function Room() {
                 const bubble = (
                   <div
                     className={`rounded-lg px-3 py-2 ${
-                      mine ? 'bg-indigo-600 text-white' : 'bg-neutral-800 border border-neutral-700'
+                      mine ? 'bg-sky-600 text-white' : 'bg-neutral-800 border border-neutral-700'
                     }`}
                   >
                     {!mine && <div className="text-xs font-medium text-gray-400 mb-0.5">{m.user.displayName}</div>}
@@ -633,7 +636,7 @@ function Room() {
                         <MessageAttachment code={code} message={m} />
                       </div>
                     )}
-                    <div className={`text-[10px] mt-0.5 text-right ${mine ? 'text-indigo-200' : 'text-gray-500'}`}>
+                    <div className={`text-[10px] mt-0.5 text-right ${mine ? 'text-sky-200' : 'text-gray-500'}`}>
                       {formatTime(m.createdAt)}
                     </div>
                   </div>
@@ -688,7 +691,7 @@ function Room() {
                   со скрепкой слева, полем по центру и эмодзи справа; кнопка отправки — отдельный
                   круг рядом. Попапы скрепки/эмодзи открываются вверх относительно своих обёрток. */}
               <div className="flex items-center gap-2 px-3 py-3">
-                <div className="flex flex-1 items-center gap-0.5 rounded-full border border-neutral-700 bg-neutral-800 pl-1 pr-1.5 focus-within:ring-2 focus-within:ring-indigo-500">
+                <div className="flex flex-1 items-center gap-0.5 rounded-full border border-neutral-700 bg-neutral-800 pl-1 pr-1.5 focus-within:ring-2 focus-within:ring-sky-500">
                   <ChatAttachMenu onSecretLink={insertIntoMessage} onPickFile={handlePickFile} />
                   <input
                     ref={inputRef}
@@ -710,7 +713,7 @@ function Room() {
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-500"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white hover:bg-sky-500"
                   title="Отправить"
                   aria-label="Отправить"
                 >
@@ -726,7 +729,7 @@ function Room() {
           {/* Перетаскиваемая перегородка (только десктоп). */}
           <div
             onMouseDown={startChatResize}
-            className="hidden sm:block w-1.5 shrink-0 cursor-col-resize bg-neutral-800 hover:bg-indigo-500 transition-colors"
+            className="hidden sm:block w-1.5 shrink-0 cursor-col-resize bg-neutral-800 hover:bg-sky-500 transition-colors"
             title="Потяни, чтобы изменить ширину чата"
           />
         </>
@@ -741,7 +744,8 @@ function Room() {
           unread={unread}
           onToggleChat={toggleChat}
           onToggleParticipants={toggleParticipants}
-          onOpenSecret={() => setShowSecret(true)}
+          onOpenSecret={() => { setSecretPrefill(''); setShowSecret(true) }}
+          onOpenKeyGen={() => setShowKeyGen(true)}
           inviteUrl={window.location.href}
           onLiveParticipants={onLiveParticipants}
           onToggleFullscreen={toggleFullscreen}
@@ -766,7 +770,7 @@ function Room() {
             <CopyLinkButton
               url={window.location.href}
               label="Пригласить"
-              className="block w-full rounded-lg bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-indigo-500"
+              className="block w-full rounded-lg bg-sky-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-sky-500"
             />
           </div>
           {modError && (
@@ -897,7 +901,20 @@ function Room() {
               <h2 className="text-lg font-semibold">Секретная ссылка</h2>
               <button onClick={() => setShowSecret(false)} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
             </div>
-            <SecretCreateForm dark />
+            <SecretCreateForm dark initialText={secretPrefill} />
+          </div>
+        </div>
+      )}
+
+      {showKeyGen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="dark-scroll w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-4 sm:p-6 shadow-xl text-gray-100">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Генератор ключей</h2>
+              <button onClick={() => setShowKeyGen(false)} className="text-gray-500 hover:text-gray-200" aria-label="Закрыть">✕</button>
+            </div>
+            {/* «Через секретку» открывает модалку секретки НА МЕСТЕ (не уводит из звонка) с ключом. */}
+            <KeyGenForm onSendToSecret={(v) => { setShowKeyGen(false); setSecretPrefill(v); setShowSecret(true) }} />
           </div>
         </div>
       )}

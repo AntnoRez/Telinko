@@ -1,13 +1,14 @@
 # VideoCall — видеозвонки, чат и секретные ссылки
 
 Учебный пет-проект: клон Яндекс Телемоста. Групповые видеозвонки, чат-комнаты в реальном
-времени и отдельный инструмент — одноразовые «секретные ссылки» с шифрованием на клиенте.
+времени и отдельные инструменты — одноразовые «секретные ссылки» и генератор ключей (оба с
+шифрованием/генерацией на клиенте). Ставится как PWA (устанавливаемое приложение).
 
 ## Стек
 
 | Слой | Технологии |
 |---|---|
-| Frontend | React 19 + Vite, Tailwind CSS 4, Zustand, React Router 7, socket.io-client, @livekit/components-react |
+| Frontend | React 19 + Vite, Tailwind CSS 4, Zustand, React Router 7, socket.io-client, @livekit/components-react, vite-plugin-pwa |
 | Backend | Node.js (ESM), Express 4, Sequelize + PostgreSQL, socket.io, livekit-server-sdk, jsonwebtoken, bcrypt |
 | Инфраструктура | Docker Compose: PostgreSQL 16 + LiveKit (self-hosted SFU) |
 | Тесты | node:test + supertest (отдельная БД `videocall_test`) |
@@ -78,7 +79,8 @@
   соединение на identity, поэтому вход со второй вкладки/девайса **заменяет** первое —
   «одно присутствие на аккаунт», без эха от двух микрофонов и без повисших «призраков».
 - Поверх дефолтного UI LiveKit — свой аудиомикшер (Web Audio, `webAudioMix`):
-  пер-участниковая громкость с бустом до 200% и мастер-громкость.
+  пер-участниковая громкость с бустом до 200% и мастер-громкость. Громкость 0% трактуется как
+  мут (иконка/тишина), «размут» с нуля возвращает 100%.
 - На каждой плитке — индикатор связи с попапом: качество (LiveKit `ConnectionQuality`),
   битрейт ↓↑ (`getStats`) и **пинг до собеседника** E2E-оценкой (как в Jitsi): прямого P2P в SFU
   нет, поэтому клиенты раз в ~3 с рассылают свой RTT до сервера по data-каналу, а показывается
@@ -113,6 +115,32 @@
   5 мин — неделя — бессрочно.
 - Единственный `consume` на id гарантирован кэшем промиса на уровне модуля: повторный рендер и
   двойной mount в dev (React StrictMode) не сожгут секрет второй раз (иначе был бы ложный 404).
+
+### Генератор ключей
+
+Отдельный инструмент (`/keygen`, а также в тулбаре звонка и меню-скрепке чата) — случайные ключи
+и пароли, генерируемые **целиком в браузере**; сервер не задействован вообще.
+
+- Генерация: `crypto.getRandomValues` (не `Math.random`) + **rejection sampling** — равномерный
+  выбор символа из алфавита без перекоса (наивный `byte % n` смещает распределение).
+- Настройки: наборы символов (a–z / A–Z / 0–9 / спецсимволы), «без похожих символов» (0/O, 1/l/I),
+  длина, префикс (напр. `sk-`), количество ключей за раз. Показывается примерная энтропия (бит).
+- Мостик к секретке: «через секретку» отдаёт ключ(и) в форму секретной ссылки — на странице это
+  навигация на `/secret`, а в звонке/чате открывается секретка **на месте** (модалкой/во вьюхе),
+  чтобы не уводить из звонка.
+
+### PWA
+
+Клиент — устанавливаемое приложение (`vite-plugin-pwa` + Workbox).
+
+- **Manifest** (`standalone`, тёмные цвета, иконки 192/512 + maskable + apple-touch) → Chrome/Android
+  предлагают «Установить», iOS — «На экран Домой»; запускается в своём окне без адресной строки.
+- **Service Worker**: precache статики (по хэшам — авто-инвалидация на деплой), `NetworkFirst` для
+  `/api` (свежие данные, кэш лишь на офлайн). Realtime (socket.io, LiveKit/ws/WebRTC) SW **не
+  перехватывает** — кэшировать его нельзя, сломало бы звонки.
+- `registerType: 'autoUpdate'` — свежая версия доходит до пользователей сразу после деплоя.
+- В dev SW выключен (`devOptions.enabled:false`), чтобы не кэшировать hot-модули; проверять —
+  на сборке (`npm run build && npm run preview`).
 
 ## Защиты — полный список
 
@@ -228,14 +256,14 @@ npm test   # node:test + supertest, отдельная БД videocall_test (см
 ```
 ├── docker-compose.yml      # PostgreSQL + LiveKit
 ├── livekit.yaml            # конфиг SFU (локальная разработка)
-├── client/                 # React SPA
+├── client/                 # React SPA (+ PWA: vite.config.js → vite-plugin-pwa, public/ иконки)
 │   └── src/
 │       ├── api/            # axios-инстанс, socket.io-клиент
 │       ├── components/     # VideoCall, аудиомикшер, индикатор связи (E2E-пинг), чат-вложения,
-│       │                   #   модалки входа/профиля, фоновое свечение
-│       ├── pages/          # Home, Prejoin, Room, SecretCreate, SecretView, GithubOauthDone
+│       │                   #   генератор ключей, модалки входа/профиля, фоновое свечение
+│       ├── pages/          # Home, Prejoin, Room, SecretCreate, SecretView, KeyGen, GithubOauthDone
 │       ├── store/          # Zustand: auth
-│       └── utils/          # crypto (Web Crypto), image, room, useCopied
+│       └── utils/          # crypto (Web Crypto), keygen (crypto-ключи), image, room, useCopied
 └── server/                 # Express API + socket.io
     ├── src/
     │   ├── config/         # Sequelize (БД) + S3-клиент (MinIO)

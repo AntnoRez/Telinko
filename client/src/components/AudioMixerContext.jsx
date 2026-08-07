@@ -18,7 +18,11 @@ export function AudioMixerProvider({ children }) {
   }, [])
 
   const toggleMasterMute = useCallback(() => {
-    setMaster((m) => ({ ...m, muted: !m.muted }))
+    setMaster((m) => {
+      // 0% трактуем как мут: клик по «размуту» на нулевой громкости возвращает звук на 100%.
+      if (m.muted || m.volume === 0) return { muted: false, volume: m.volume === 0 ? 1 : m.volume }
+      return { ...m, muted: true }
+    })
   }, [])
 
   // Настройки конкретного участника (с дефолтами, если ещё не трогали).
@@ -35,20 +39,26 @@ export function AudioMixerProvider({ children }) {
   }, [])
 
   const toggleParticipantMute = useCallback((identity) => {
-    setPerId((p) => ({
-      ...p,
-      [identity]: { volume: p[identity]?.volume ?? 1, muted: !(p[identity]?.muted ?? false) },
-    }))
+    setPerId((p) => {
+      const cur = p[identity] ?? DEFAULT
+      // 0% = мут: размут на нулевой громкости возвращает звук на 100%.
+      const next =
+        cur.muted || cur.volume === 0
+          ? { muted: false, volume: cur.volume === 0 ? 1 : cur.volume }
+          : { ...cur, muted: true }
+      return { ...p, [identity]: next }
+    })
   }, [])
 
   // Итоговые значения для аудио-рендера: перемножаем мастер и личное.
-  // Мут мастера ИЛИ личный мут → тишина. Иначе громкости перемножаются.
+  // Мут мастера/личный ИЛИ нулевая итоговая громкость → тишина (0% = мут). Иначе перемножаем.
   const effective = useCallback(
     (identity) => {
       const p = perId[identity] ?? DEFAULT
+      const volume = master.volume * p.volume
       return {
-        muted: master.muted || p.muted,
-        volume: master.volume * p.volume,
+        muted: master.muted || p.muted || volume === 0,
+        volume,
       }
     },
     [master, perId]

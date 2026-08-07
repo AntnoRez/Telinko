@@ -45,6 +45,10 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange, title, pop
   )
   const [open, setOpen] = useState(false) // видимость попапа на таче
 
+  // 0% трактуем как мут: иконка/подпись показывают «выключено», даже если флаг muted ещё false
+  // (сам мут-переключатель живёт в контексте — он же поднимет громкость при размуте с нуля).
+  const effMuted = muted || volume === 0
+
   // Позиция попапа. Начинается вплотную к кнопке (без margin), зазор — через padding,
   // чтобы область наведения была непрерывной (курсор доходит до слайдера без обрыва).
   // 'up': привязка к ЛЕВОМУ краю кнопки (раскрытие вправо), а не центрирование —
@@ -63,7 +67,7 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange, title, pop
         title={isTouch ? 'Громкость' : title}
         className="lk-button flex items-center justify-center"
       >
-        <SpeakerIcon muted={muted} />
+        <SpeakerIcon muted={effMuted} />
       </button>
 
       {/* Попап: десктоп — по наведению (group-hover), тач — по тапу (open). */}
@@ -78,10 +82,10 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange, title, pop
             <button
               type="button"
               onClick={onToggleMute}
-              title={muted ? 'Включить звук' : 'Заглушить'}
+              title={effMuted ? 'Включить звук' : 'Заглушить'}
               className="flex items-center justify-center text-white"
             >
-              <SpeakerIcon muted={muted} />
+              <SpeakerIcon muted={effMuted} />
             </button>
           )}
           <input

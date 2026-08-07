@@ -9,6 +9,7 @@ import Home from './pages/Home' // лендинг — грузим сразу (�
 const Room = lazy(() => import('./pages/Room'))
 const SecretCreate = lazy(() => import('./pages/SecretCreate'))
 const SecretView = lazy(() => import('./pages/SecretView'))
+const KeyGen = lazy(() => import('./pages/KeyGen'))
 const GithubOauthDone = lazy(() => import('./pages/GithubOauthDone'))
 
 function App() {
@@ -35,6 +36,9 @@ function App() {
       {/* Секретные ссылки — публичные. Создание + просмотр. */}
       <Route path="/secret" element={<SecretCreate />} />
       <Route path="/secret/:id" element={<SecretView />} />
+
+      {/* Генератор ключей — публичный, полностью клиентский. */}
+      <Route path="/keygen" element={<KeyGen />} />
 
       {/* Комната — ПУБЛИЧНАЯ: по ссылке заходит и гость без аккаунта. Личность (гость или
           реальный аккаунт) выясняет prejoin-экран: нет сессии → заводит гостя; есть cookie →

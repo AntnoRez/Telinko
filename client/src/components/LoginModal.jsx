@@ -29,7 +29,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
   const heading = isRegister ? 'Регистрация' : title || 'Войти в аккаунт'
 
   const field =
-    'rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+    'rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500'
 
   async function run(fn) {
     setBusy(true)
@@ -146,7 +146,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
             <button
               type="submit"
               disabled={busy || !name.trim()}
-              className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+              className="rounded-lg bg-sky-600 px-4 py-2 font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
             >
               {busy ? 'Создаём…' : 'Создать аккаунт'}
             </button>
@@ -199,7 +199,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
             </div>
             <button
               type="submit"
-              className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500"
+              className="mt-3 w-full rounded-lg bg-sky-600 px-4 py-2 font-medium text-white transition hover:bg-sky-500"
             >
               Сохранил — продолжить
             </button>
@@ -235,7 +235,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
             value={password} onChange={(e) => setPassword(e.target.value)}
             className={field}
           />
-          <button type="submit" disabled={busy} className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50">
+          <button type="submit" disabled={busy} className="rounded-lg bg-sky-600 px-4 py-2 font-medium text-white transition hover:bg-sky-500 disabled:opacity-50">
             {isRegister ? 'Зарегистрироваться' : 'Войти'}
           </button>
         </form>
@@ -254,7 +254,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
         {githubWaiting && (
           <p className="mt-2 text-center text-xs text-gray-400">
             Заверши вход в открывшемся окне GitHub…{' '}
-            <button type="button" onClick={cancelGithub} className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2">
+            <button type="button" onClick={cancelGithub} className="text-sky-300 hover:text-sky-200 underline underline-offset-2">
               Отмена
             </button>
           </p>
@@ -271,7 +271,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
 
         <p className="mt-4 text-center text-xs text-gray-500">
           {isRegister ? 'Уже есть аккаунт? ' : 'Нет аккаунта? '}
-          <button type="button" onClick={switchMode} className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2">
+          <button type="button" onClick={switchMode} className="text-sky-300 hover:text-sky-200 underline underline-offset-2">
             {isRegister ? 'Войти' : 'Зарегистрироваться'}
           </button>
         </p>

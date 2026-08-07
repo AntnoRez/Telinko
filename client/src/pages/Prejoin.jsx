@@ -187,7 +187,7 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             maxLength={50}
-            className="w-full rounded-lg bg-neutral-800/80 border border-neutral-700 px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-lg bg-neutral-800/80 border border-neutral-700 px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
           />
         ) : (
           <p className="text-center text-sm text-gray-400">
@@ -198,7 +198,7 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
           type="button"
           onClick={handleJoin}
           disabled={!canJoin}
-          className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-lg bg-sky-600 px-4 py-3 font-medium text-white transition hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {joining ? 'Входим…' : 'Присоединиться к встрече'}
         </button>
@@ -210,7 +210,7 @@ function Prejoin({ code, inviteUrl, onJoin, onExit }) {
           <button
             type="button"
             onClick={() => setShowLogin(true)}
-            className="mt-1 self-center text-sm text-indigo-300 hover:text-indigo-200 underline underline-offset-2"
+            className="mt-1 self-center text-sm text-sky-300 hover:text-sky-200 underline underline-offset-2"
           >
             Уже есть аккаунт? Войти
           </button>

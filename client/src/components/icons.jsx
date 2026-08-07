@@ -29,7 +29,18 @@ export function LockIcon(props) {
   )
 }
 
-// Логотип Telinko — «V» + play-треугольник в индиго→фиолетовом градиенте (наш акцент).
+// Ключ — плитка/страница «Генератор ключей».
+export function KeyIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 2-9.6 9.6" />
+      <path d="m15.5 7.5 3 3L22 7l-3-3" />
+    </svg>
+  )
+}
+
+// Логотип Telinko — «V» + play-треугольник в sky→blue градиенте (наш акцент).
 // Своя палитра (не currentColor): бренд-цвет фиксирован. Размер задаётся через className;
 // viewBox 256×200 (шире квадрата) — в квадратном боксе фигура впишется по ширине с центровкой.
 export function TelinkoLogo(props) {
@@ -37,8 +48,8 @@ export function TelinkoLogo(props) {
     <svg viewBox="0 0 256 200" fill="none" aria-hidden {...props}>
       <defs>
         <linearGradient id="tl-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#6366F1" />
-          <stop offset="100%" stopColor="#7C3AED" />
+          <stop offset="0%" stopColor="#0EA5E9" />
+          <stop offset="100%" stopColor="#2563EB" />
         </linearGradient>
       </defs>
       {/* Буква V */}
@@ -47,7 +58,7 @@ export function TelinkoLogo(props) {
         d="M36 24 Q36 12 48 12 H90 Q98 12 102 20 L128 72 L154 20 Q158 12 166 12 H208 Q220 12 220 24 Q220 28 218 32 L158 154 Q152 166 138 166 H118 Q104 166 98 154 L38 32 Q36 28 36 24 Z"
       />
       {/* Грань-шов */}
-      <path d="M118 166 L128 72 L138 166 Z" fill="#4338CA" opacity=".28" />
+      <path d="M118 166 L128 72 L138 166 Z" fill="#1E40AF" opacity=".28" />
       {/* Play-треугольник */}
       <path
         fill="url(#tl-grad)"

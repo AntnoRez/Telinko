@@ -37,7 +37,7 @@ export default function Avatar({ userId, name, size = 40, version, hasAvatar, cl
     <div
       style={{ ...style, fontSize: Math.round(size * 0.42) }}
       aria-label={name || ''}
-      className={`flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 font-semibold text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 font-semibold text-white ${className}`}
     >
       {initial}
     </div>

@@ -5,7 +5,7 @@
 // отсеивать такие имена ДО prejoin: и на главной при «Создать», и по прямой ссылке в Room.
 // Меняешь список на бэке — поправь и здесь.
 export const RESERVED_ROOM_CODES = new Set([
-  'api', 'assets', 'oauth', 'secret', 'room', 'favicon.svg', 'favicon.ico', 'robots.txt',
+  'api', 'assets', 'oauth', 'secret', 'keygen', 'room', 'favicon.svg', 'favicon.ico', 'robots.txt',
   'login', 'register', 'home', 'about', 'help', 'settings', 'admin', 'terms', 'privacy',
 ])
 
