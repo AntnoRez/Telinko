@@ -34,20 +34,10 @@ export default defineConfig({
         // SPA: неизвестный путь навигации → index.html. Но НЕ для realtime/API — их отдаёт сеть.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/socket\.io/, /^\/livekit/],
-        runtimeCaching: [
-          {
-            // API — network-first: всегда свежие данные, кэш лишь запасной аэродром при офлайне.
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
-            },
-          },
-        ],
-        // socket.io и LiveKit (ws/webrtc) SW не перехватывает вовсе — правил для них нет,
-        // запросы идут в сеть напрямую. Кэшировать realtime нельзя (сломает звонки/чат).
+        // /api НЕ кэшируем СОЗНАТЕЛЬНО: приватные ответы (профиль, комнаты, аватары) не должны
+        // оседать в CacheStorage (не чистится при logout → утечка на общем устройстве). Правил
+        // runtimeCaching нет → все /api, socket.io и LiveKit (ws/webrtc) идут в сеть мимо SW.
+        // Кэшируется только публичная статика (app shell) через precache выше.
       },
       devOptions: { enabled: false }, // в dev SW не мешает (иначе кэширует hot-модули)
     }),
