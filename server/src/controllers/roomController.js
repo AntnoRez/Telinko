@@ -118,7 +118,7 @@ export async function claimOrganizer(req, res) {
       getIO()?.to(room.code).emit('call:started', { code: room.code });
     }
 
-    res.json({ organizerId: room.organizerId, started: true });
+    res.json({ organizerId: room.organizerId, startedAt: room.startedAt, started: true });
   } catch (err) {
     console.error('claimOrganizer error:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });

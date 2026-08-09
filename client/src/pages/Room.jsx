@@ -381,6 +381,10 @@ function Room() {
     try {
       const res = await api.post(`/api/rooms/${code}/claim-organizer`)
       setOrganizerId(res.data.organizerId)
+      // startedAt берём прямо из ответа claim, а НЕ ждём события call:started: ниже мы
+      // переподключаем сокет, и своё же call:started организатор мог бы пропустить в момент
+      // реконнекта → таймер звонка не показался бы (гонка, «то есть/то нет»).
+      setStartedAt(res.data.startedAt)
       // Личность могла смениться (гость → аккаунт) → переподключаем сокет, чтобы presence и
       // авторство сообщений считались от нового аккаунта, а не от прежнего гостя.
       socket.disconnect()
