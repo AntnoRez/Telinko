@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   LiveKitRoom,
   GridLayout,
-  CarouselLayout,
   LayoutContextProvider,
   ParticipantTile,
   DisconnectButton,
@@ -93,17 +92,22 @@ function sameTrack(a, b) {
   )
 }
 
+// Стабильный React-ключ трека для собственной ленты (без publication — плейсхолдер камеры).
+function trackKey(t) {
+  return `${t.participant?.identity}_${t.source}_${t.publication?.trackSid ?? 'ph'}`
+}
+
 // Плитка участника. <ParticipantTile> остаётся прямым ребёнком сетки (иначе слетают
 // размеры/стили), а её содержимое отдаём детьми — воспроизводим дефолт LiveKit
 // (видео/аватар/имя) и добавляем наш регулятор громкости. group/tile — чтобы регулятор
 // всплывал при наведении на плитку.
 // trackRef (опц.): в сетке/ленте LiveKit прокидывает трек через контекст (проп не нужен), а для
 // одиночной «главной» плитки передаём его явным пропом.
-function MixerTile({ trackRef: trackRefProp }) {
+function MixerTile({ trackRef: trackRefProp, small }) {
   const trackRef = useEnsureTrackRef(trackRefProp)
   // Двойной клик по плитке = закрепить/открепить её «главной» (локально, через layout-context).
   // useFocusToggle даёт готовый onClick-переключатель + флаг inFocus; вешаем его на onDoubleClick.
-  const { mergedProps, inFocus } = useFocusToggle({ trackRef, props: {} })
+  const { mergedProps } = useFocusToggle({ trackRef, props: {} })
 
   // Реальное видео есть? (у выключенной камеры трек-плейсхолдер без publication → покажем аватар)
   const isVideo =
@@ -119,16 +123,6 @@ function MixerTile({ trackRef: trackRefProp }) {
       onDoubleClick={(e) => { e.preventDefault(); mergedProps.onClick?.(e) }}
     >
       {isVideo && <VideoTrack trackRef={trackRef} />}
-
-      {/* Бейдж «закреплено» на главной — подсказка, что двойной клик открепит. */}
-      {inFocus && (
-        <div
-          className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white"
-          title="Двойной клик — открепить"
-        >
-          📌
-        </div>
-      )}
 
       {/* Аватар, когда видео нет (CSS LiveKit сам прячет .lk-participant-placeholder при видео).
           Вместо серого силуэта LiveKit — наш кружок: аватар участника или буква. userId достаём
@@ -155,8 +149,9 @@ function MixerTile({ trackRef: trackRefProp }) {
         </div>
       </div>
 
-      {/* Наш регулятор громкости этого участника. */}
-      <ParticipantTileControls participant={trackRef.participant} />
+      {/* Наш регулятор громкости этого участника. На крупных плитках — снизу слева (рядом с ником),
+          на мелких плитках ленты (small) — сверху слева, как было. */}
+      <ParticipantTileControls participant={trackRef.participant} small={small} />
     </ParticipantTile>
   )
 }
@@ -693,10 +688,14 @@ function CallStage({ onToggleFullscreen, isFullscreen, unread, onToggleChat, onT
                 <MixerTile trackRef={focusTrack} />
               </div>
               {carouselTracks.length > 0 && (
-                <div className="h-24 shrink-0 sm:h-28">
-                  <CarouselLayout tracks={carouselTracks} orientation="horizontal">
-                    <MixerTile />
-                  </CarouselLayout>
+                // Своя лента (вместо CarouselLayout — у него баг updatePages при смене состава):
+                // горизонтальный ряд с прокруткой, каждый трек — отдельная плитка.
+                <div className="videocall-strip dark-scroll flex h-24 shrink-0 gap-2 overflow-x-auto sm:h-28">
+                  {carouselTracks.map((t) => (
+                    <div key={trackKey(t)} className="aspect-video h-full shrink-0 overflow-hidden rounded-lg">
+                      <MixerTile trackRef={t} small />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

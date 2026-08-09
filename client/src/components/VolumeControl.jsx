@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 // Монохромная иконка динамика (вкл/выкл). currentColor → наследует цвет текста (белый).
 function SpeakerIcon({ muted }) {
@@ -34,76 +35,133 @@ function SpeakerIcon({ muted }) {
 // Десктоп (есть наведение): клик по кнопке = МУТ, слайдер всплывает по наведению.
 // Тач (нет наведения): тап по кнопке = открыть/закрыть попап (НЕ мутит), а мут —
 // отдельной кнопкой ВНУТРИ попапа (иначе на таче мут был бы недоступен вместе со слайдером).
+// Попап рендерится ПОРТАЛОМ (fixed по координатам кнопки), а не внутри плитки — иначе на мелких
+// плитках он обрезался бы их краями (overflow:hidden для скругления видео).
 // props:
 //   volume, muted, onToggleMute, onVolumeChange, title
-//   popup: 'up' | 'right' — куда всплывает слайдер
+//   popup: 'up' | 'right' — куда всплывает слайдер относительно кнопки
 function VolumeControl({ volume, muted, onToggleMute, onVolumeChange, title, popup = 'up' }) {
   // Тач-устройство? Определяем один раз по медиа-фиче hover.
   const isTouch = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches,
     []
   )
-  const [open, setOpen] = useState(false) // видимость попапа на таче
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null) // { left, top, ty } — fixed-координаты попапа
+  const [target, setTarget] = useState(null) // куда портируем (fullscreen-элемент или body)
+  const btnRef = useRef(null)
+  const popupRef = useRef(null)
+  const closeTimer = useRef(null)
 
   // 0% трактуем как мут: иконка/подпись показывают «выключено», даже если флаг muted ещё false
   // (сам мут-переключатель живёт в контексте — он же поднимет громкость при размуте с нуля).
   const effMuted = muted || volume === 0
 
-  // Позиция попапа. Начинается вплотную к кнопке (без margin), зазор — через padding,
-  // чтобы область наведения была непрерывной (курсор доходит до слайдера без обрыва).
-  // 'up': привязка к ЛЕВОМУ краю кнопки (раскрытие вправо), а не центрирование —
-  // иначе у кнопки мастер-громкости (крайняя слева) попап половиной уходил за левый
-  // край экрана на узких (мобильных) экранах.
-  const popupPos =
-    popup === 'right'
-      ? 'left-full top-1/2 -translate-y-1/2 pl-2'
-      : 'bottom-full left-0 pb-2'
+  function openPopup() {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (!r) return
+    // В нативном фуллскрине body-портал не виден (показывается только fullscreen-поддерево) →
+    // портируем в fullscreenElement, иначе в body. Позиция fixed по кнопке → не режется плиткой.
+    setTarget(document.fullscreenElement || document.body)
+    // Прикидка ширины попапа (иконки + слайдер + %) — для клампа/флипа, чтобы не вылезал за экран.
+    const PW = isTouch ? 280 : 200
+    const vw = window.innerWidth
+    if (popup === 'right') {
+      // Справа от кнопки; если не влезает (правый участник у края) — флип влево от кнопки.
+      let left = r.right + 8
+      if (left + PW > vw - 8) left = r.left - PW - 8
+      left = Math.max(8, Math.min(left, vw - PW - 8))
+      setPos({ left, top: r.top + r.height / 2, ty: '-50%' })
+    } else {
+      // Над кнопкой; кламп по горизонтали, если кнопка близко к краю экрана.
+      const left = Math.max(8, Math.min(r.left, vw - PW - 8))
+      setPos({ left, top: r.top - 8, ty: '-100%' })
+    }
+    clearTimeout(closeTimer.current)
+    setOpen(true)
+  }
+  const scheduleClose = () => { closeTimer.current = setTimeout(() => setOpen(false), 140) }
+  const cancelClose = () => clearTimeout(closeTimer.current)
+
+  // Снять висящий таймер при размонтировании.
+  useEffect(() => () => clearTimeout(closeTimer.current), [])
+
+  // Скролл/ресайз отвязали бы fixed-попап от кнопки → просто закрываем.
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
+  // Тач: закрытие по тапу вне кнопки и попапа.
+  useEffect(() => {
+    if (!open || !isTouch) return
+    const onDoc = (e) => {
+      if (!btnRef.current?.contains(e.target) && !popupRef.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open, isTouch])
+
+  // Кнопка: тач — тап открывает/закрывает попап; десктоп — клик мутит, наведение открывает попап.
+  const btnHandlers = isTouch
+    ? { onClick: () => (open ? setOpen(false) : openPopup()) }
+    : { onClick: onToggleMute, onMouseEnter: openPopup, onMouseLeave: scheduleClose }
 
   return (
-    <div className="group/vol relative flex items-center text-white">
+    <div className="flex items-center text-white">
       <button
+        ref={btnRef}
         type="button"
-        onClick={isTouch ? () => setOpen((o) => !o) : onToggleMute}
+        {...btnHandlers}
         title={isTouch ? 'Громкость' : title}
         className="lk-button flex items-center justify-center"
       >
         <SpeakerIcon muted={effMuted} />
       </button>
 
-      {/* Попап: десктоп — по наведению (group-hover), тач — по тапу (open). */}
-      <div
-        className={`absolute z-20 transition-opacity ${popupPos} ${
-          open ? 'opacity-100 visible' : 'opacity-0 invisible'
-        } group-hover/vol:opacity-100 group-hover/vol:visible`}
-      >
-        <div className="flex items-center gap-2 rounded bg-neutral-900/95 px-2 py-1 shadow-lg">
-          {/* На таче мут живёт здесь (на десктопе мутит главная кнопка). */}
-          {isTouch && (
-            <button
-              type="button"
-              onClick={onToggleMute}
-              title={effMuted ? 'Включить звук' : 'Заглушить'}
-              className="flex items-center justify-center text-white"
-            >
-              <SpeakerIcon muted={effMuted} />
-            </button>
-          )}
-          <input
-            type="range"
-            min={0}
-            max={2}
-            step={0.05}
-            value={volume}
-            disabled={muted}
-            onChange={(e) => onVolumeChange(Number(e.target.value))}
-            // На таче (нет hover) слайдер шире и выше — по нему проще попасть пальцем (правка 11).
-            className="w-24 accent-neutral-200 [@media(hover:none)]:h-2 [@media(hover:none)]:w-44"
-          />
-          <span className="w-9 text-right text-[10px] tabular-nums text-white">
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
-      </div>
+      {open && pos && target &&
+        createPortal(
+          <div
+            ref={popupRef}
+            style={{ position: 'fixed', left: pos.left, top: pos.top, transform: `translateY(${pos.ty})` }}
+            onMouseEnter={!isTouch ? cancelClose : undefined}
+            onMouseLeave={!isTouch ? scheduleClose : undefined}
+            className="z-[70] flex items-center gap-2 rounded bg-neutral-900/95 px-2 py-1.5 shadow-lg"
+          >
+            {/* На таче мут живёт здесь (на десктопе мутит главная кнопка). */}
+            {isTouch && (
+              <button
+                type="button"
+                onClick={onToggleMute}
+                title={effMuted ? 'Включить звук' : 'Заглушить'}
+                className="flex items-center justify-center text-white"
+              >
+                <SpeakerIcon muted={effMuted} />
+              </button>
+            )}
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.05}
+              value={volume}
+              disabled={muted}
+              onChange={(e) => onVolumeChange(Number(e.target.value))}
+              // На таче слайдер шире и выше — проще попасть пальцем (правка 11).
+              className="w-28 accent-neutral-200 [@media(hover:none)]:h-2 [@media(hover:none)]:w-44"
+            />
+            <span className="w-9 text-right text-[10px] tabular-nums text-white">
+              {Math.round(volume * 100)}%
+            </span>
+          </div>,
+          target
+        )}
     </div>
   )
 }

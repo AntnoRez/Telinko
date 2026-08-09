@@ -201,7 +201,7 @@ function Home() {
               <div className="min-w-0">
                 <div className="font-semibold">Генератор ключей</div>
                 <p className="mt-1 text-sm text-gray-400">
-                  Случайные ключи и пароли — в браузере
+                  Случайные ключи и пароли
                 </p>
               </div>
               <span className="ml-auto shrink-0 text-lg text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-gray-300">→</span>

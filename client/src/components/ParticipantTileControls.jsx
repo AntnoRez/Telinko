@@ -4,17 +4,21 @@ import { useAudioMixer } from './AudioMixerContext'
 // Регулятор громкости участника поверх его плитки (в углу).
 // Появляется при наведении на плитку (group/tile у <ParticipantTile>).
 // Свою плитку не трогаем — себя не слушаем.
-function ParticipantTileControls({ participant }) {
+function ParticipantTileControls({ participant, small }) {
   const { getParticipant, setParticipantVolume, toggleParticipantMute } = useAudioMixer()
 
   if (participant.isLocal) return null // свою громкость не крутим
 
   const { volume, muted } = getParticipant(participant.identity)
 
+  // Крупные плитки — регулятор слева НАД строкой имени (bottom-8, чтобы не перекрывать ник);
+  // мелкие плитки ленты (small) — сверху слева, как было (внизу у них тесно и там свой индикатор).
+  const corner = small ? 'top-1 left-1' : 'bottom-8 left-1'
+
   return (
     // По умолчанию (тач) регулятор виден. На устройствах с наведением прячем до
     // наведения на плитку — через arbitrary-вариант [@media(hover:hover)] (остаёмся в Tailwind).
-    <div className="absolute top-1 left-1 z-10 transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tile:opacity-100">
+    <div className={`absolute ${corner} z-10 transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tile:opacity-100`}>
       <VolumeControl
         volume={volume}
         muted={muted}

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { useCopied } from '../utils/useCopied'
 import { GithubIcon } from './icons'
 
 // Модалка входа/регистрации: email+пароль (+имя при регистрации) или GitHub. Переключатель режима
@@ -22,6 +23,7 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
   const [creds, setCreds] = useState(null) // { email, password } после one-click — показываем ОДИН раз
   const [quickAsking, setQuickAsking] = useState(false) // экран ввода имени для one-click
   const [showPass, setShowPass] = useState(false) // показать выданный пароль текстом (глазик)
+  const [credsCopied, copyCreds] = useCopied() // «Скопировать» доступы (логин + пароль)
 
   const isRegister = mode === 'register'
   // Заголовок: в режиме регистрации всегда «Регистрация»; для входа — проп title (напр.
@@ -198,8 +200,15 @@ export default function LoginModal({ onClose, onSuccess, title, subtitle, initia
               </button>
             </div>
             <button
+              type="button"
+              onClick={() => copyCreds(`${creds.email}\n${creds.password}`)}
+              className="mt-3 w-full rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium text-gray-100 transition hover:bg-neutral-800"
+            >
+              {credsCopied ? 'Скопировано!' : 'Скопировать логин и пароль'}
+            </button>
+            <button
               type="submit"
-              className="mt-3 w-full rounded-lg bg-sky-600 px-4 py-2 font-medium text-white transition hover:bg-sky-500"
+              className="w-full rounded-lg bg-sky-600 px-4 py-2 font-medium text-white transition hover:bg-sky-500"
             >
               Сохранил — продолжить
             </button>

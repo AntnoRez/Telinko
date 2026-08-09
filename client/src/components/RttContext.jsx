@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useDataChannel, useRoomContext } from '@livekit/components-react'
 
 // «Пинг собеседника» в SFU (как E2E RTT в Jitsi). Прямого соединения между участниками нет —
@@ -73,8 +73,15 @@ export function RttProvider({ children }) {
     }
   })
 
+  // send из useDataChannel НЕ стабилен (новый на каждый рендер). Держим его в ref, чтобы НЕ
+  // включать в deps интервального эффекта — иначе эффект перезапускался бы на каждом рендере
+  // (setMyRtt → рендер → новый send → перезапуск → setMyRtt …), давая бесконечный цикл
+  // «Maximum update depth exceeded».
+  const sendRef = useRef(send)
+  useEffect(() => { sendRef.current = send }, [send])
+
   // Периодически меряем свой RTT до сервера и рассылаем. Ненадёжная доставка (reliable:false) —
-  // значение эфемерное, потерю следующий тик закроет.
+  // значение эфемерное, потерю следующий тик закроет. Зависим только от room (он стабилен).
   useEffect(() => {
     let cancelled = false
     async function tick() {
@@ -82,7 +89,7 @@ export function RttProvider({ children }) {
       if (cancelled || rtt == null) return
       setMyRtt(rtt)
       try {
-        await send(new TextEncoder().encode(JSON.stringify({ rtt })), { reliable: false })
+        await sendRef.current(new TextEncoder().encode(JSON.stringify({ rtt })), { reliable: false })
       } catch {
         // канал мог быть не готов — не страшно, повторим на следующем тике
       }
@@ -93,7 +100,7 @@ export function RttProvider({ children }) {
       cancelled = true
       clearInterval(id)
     }
-  }, [room, send])
+  }, [room])
 
   return (
     <RttContext.Provider value={{ myId: room.localParticipant.identity, myRtt, peerRtts }}>
